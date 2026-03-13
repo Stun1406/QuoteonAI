@@ -1,0 +1,9 @@
+ALTER TABLE message_threads
+  ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open',
+  ADD COLUMN IF NOT EXISTS quote_value DECIMAL(10,2),
+  ADD COLUMN IF NOT EXISTS won_value DECIMAL(10,2),
+  ADD COLUMN IF NOT EXISTS loss_reason TEXT,
+  ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS notes TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_message_threads_status ON message_threads(status);

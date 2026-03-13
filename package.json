@@ -1,0 +1,39 @@
+{
+  "name": "fld-crm-v2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:migrate": "tsx lib/db/migrate.ts",
+    "db:seed": "tsx lib/db/seed.ts",
+    "db:test": "tsx scripts/test-connection.ts",
+    "db:test-phase2": "tsx scripts/test-phase2.ts",
+    "test:drayage": "tsx lib/pricing/drayage.test.ts",
+    "test:transloading": "tsx lib/pricing/transloading.test.ts",
+    "test:webhook": "tsx scripts/test-email-webhook.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "next": "15.2.3",
+    "openai": "^6.27.0",
+    "postal-mime": "^2.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resend": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17",
+    "eslint": "^9",
+    "eslint-config-next": "15.2.3",
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}
