@@ -22,6 +22,37 @@
   --color-purple-lt: #EDE9FE;
 }
 
+[data-theme="dark"] {
+  --color-bg: #0F172A;
+  --color-bg-2: #1E293B;
+  --color-bg-3: #334155;
+  --color-border: #334155;
+  --color-border-2: #475569;
+  --color-text-1: #F1F5F9;
+  --color-text-2: #CBD5E1;
+  --color-text-3: #94A3B8;
+  --color-text-4: #64748B;
+  --color-accent: #60A5FA;
+  --color-accent-lt: #1E3A5F;
+  --color-success: #4ADE80;
+  --color-success-lt: #052E16;
+  --color-warn: #FCD34D;
+  --color-warn-lt: #431407;
+  --color-danger: #F87171;
+  --color-danger-lt: #450A0A;
+  --color-purple: #A78BFA;
+  --color-purple-lt: #2E1065;
+}
+
+/* Make bg-white respond to dark mode */
+[data-theme="dark"] .bg-white {
+  background-color: var(--color-bg-2) !important;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }

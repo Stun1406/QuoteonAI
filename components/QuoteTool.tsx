@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { calculateDrayageQuote, normalizeCityName } from '@/lib/pricing/drayage'
+import React, { useState, useEffect, useCallback, useTransition } from 'react'
+import { useSession, signOut } from 'next-auth/react'
+import { calculateDrayageQuote } from '@/lib/pricing/drayage'
 import { estimateDrayageForUnknownCity } from '@/lib/pricing/drayage-distance'
 import { calculateWarehouseQuote } from '@/lib/pricing/calculator'
 import { calculateLastMileQuote } from '@/lib/pricing/last-mile'
@@ -25,6 +26,20 @@ type TabMode =
   | 'pricing-logic'
   | 'pricing-history'
   | 'customer'
+  | 'team'
+
+type AppUser = {
+  id: string; email: string; name: string | null; role: string; is_active: boolean
+  created_at: string
+}
+
+type RateChangeRequest = {
+  id: string; rate_key: string; rate_label: string
+  current_value: number; requested_value: number; reason: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string; requester_name: string | null; requester_email: string
+  reviewer_name: string | null; reviewed_at: string | null; review_note: string | null
+}
 
 type MockEmail = {
   id: string
@@ -98,39 +113,64 @@ type ContainerFormGroup = {
 
 type SearchThread = {
   id: string
-  thread_id: string
-  created_at: string
-  intent: string
-  processor_type: string
-  quote_value: number | null
+  subject: string
+  from: string
+  to: string
   status: string
-  contact_name: string | null
-  contact_email: string | null
-  company_name: string | null
+  last_message_at: string
+  created_at: string
+  first_message: string | null
+  message_count: number
+  reply_count: number
 }
 
-type ThreadDetail = {
-  thread: {
-    thread_id: string
-    intent: string
-    processor_type: string
-    status: string
-    created_at: string
-  }
-  contact: { name: string | null; email: string | null } | null
-  company: { business_name: string | null } | null
+type EmailMessage = {
+  id: string
+  direction: 'inbound' | 'outbound'
+  from_email: string
+  to_email: string
+  body_text: string
+  body_html: string | null
+  is_read: boolean
+  received_at: string
+}
+
+type AiThreadEntry = {
+  id: string
+  thread_id: string
+  intent: string
+  processor_type: string
+  ai_status: string
+  quote_value: number | null
+  confidence_score: number | null
+  ai_created_at: string
+  contact_name: string | null
+  company_name: string | null
   artifacts: Array<{
-    id: string
-    sequence_order: number
     artifact_type: string
     artifact_data: Record<string, unknown>
+    sequence_order: number
     created_at: string
   }>
 }
 
+type ThreadDetail = {
+  thread: {
+    id: string
+    subject: string
+    participant_from: string
+    participant_to: string
+    status: string
+    last_message_at: string
+    created_at: string
+  }
+  messages: EmailMessage[]
+  aiThreads: AiThreadEntry[]
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS: { id: TabMode; label: string }[] = [
+const TABS: { id: TabMode; label: string; minRole?: string }[] = [
   { id: 'inbox', label: 'Message Inbox (AI)' },
   { id: 'ai-review', label: 'AI Quote' },
   { id: 'drayage', label: 'Drayage Quote Builder' },
@@ -138,9 +178,16 @@ const TABS: { id: TabMode; label: string }[] = [
   { id: 'last-mile', label: 'Last-Mile Delivery' },
   { id: 'search', label: 'Search Threads' },
   { id: 'pricing-logic', label: 'Rate Sheet' },
-  { id: 'pricing-history', label: 'Change History' },
-  { id: 'customer', label: 'Business Settings' },
+  { id: 'pricing-history', label: 'Change History', minRole: 'manager' },
+  { id: 'customer', label: 'Business Settings', minRole: 'manager' },
+  { id: 'team', label: 'Team', minRole: 'admin' },
 ]
+
+function roleLevel(role?: string): number {
+  if (role === 'admin') return 3
+  if (role === 'manager') return 2
+  return 1 // staff or undefined
+}
 
 const DEFAULT_CUSTOMER_SETTINGS: CustomerSettings = {
   companyName: 'FL Distributions',
@@ -284,17 +331,6 @@ function fmtTime(iso: string): string {
   }
 }
 
-function fmtHMS(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  } catch {
-    return iso
-  }
-}
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -334,8 +370,9 @@ function statusBadgeClass(status: 'new' | 'in-progress' | 'responded') {
 }
 
 function statusLabel(status: 'new' | 'in-progress' | 'responded') {
-  if (status === 'in-progress') return 'In Progress'
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  if (status === 'new') return 'New'
+  if (status === 'in-progress') return 'Unresponded'
+  return 'Responded'
 }
 
 function formatDrayageEmail(result: DrayageQuoteResult, companyName: string, phoneNumber: string): string {
@@ -426,10 +463,15 @@ function ToggleBtn({
   )
 }
 
-function Card({ title, children }: { title?: string; children: React.ReactNode }) {
+function Card({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-[var(--color-border)] rounded-xl p-5">
-      {title && <h3 className="text-sm font-semibold text-[var(--color-text-1)] mb-4">{title}</h3>}
+      {(title || action) && (
+        <div className="flex items-center justify-between mb-4">
+          {title && <h3 className="text-sm font-semibold text-[var(--color-text-1)]">{title}</h3>}
+          {action}
+        </div>
+      )}
       {children}
     </div>
   )
@@ -446,6 +488,57 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={`w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 ${props.className ?? ''}`}
+    />
+  )
+}
+
+// Numeric input that allows free editing (backspace to zero, etc.)
+function NumericInput({
+  value, onChange, min, step, placeholder,
+}: {
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  step?: number
+  placeholder?: string
+}) {
+  const [text, setText] = React.useState(value === 0 ? '' : String(value))
+  const externalRef = React.useRef(value)
+
+  // Sync when parent resets the value (e.g. ↺ Reset)
+  React.useEffect(() => {
+    if (externalRef.current !== value) {
+      externalRef.current = value
+      setText(value === 0 ? '' : String(value))
+    }
+  })
+
+  const isDecimal = step !== undefined && step < 1
+  const pattern = isDecimal ? /^\d*\.?\d*$/ : /^\d*$/
+
+  return (
+    <input
+      type="text"
+      inputMode={isDecimal ? 'decimal' : 'numeric'}
+      value={text}
+      placeholder={placeholder ?? '0'}
+      min={min}
+      className="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500"
+      onChange={e => {
+        const raw = e.target.value
+        if (raw === '' || pattern.test(raw)) {
+          setText(raw)
+          const n = raw === '' || raw === '.' ? 0 : parseFloat(raw)
+          if (!isNaN(n)) {
+            externalRef.current = n
+            onChange(n)
+          }
+        }
+      }}
+      onBlur={() => {
+        const n = text === '' || text === '.' ? 0 : parseFloat(text)
+        setText(isNaN(n) || n === 0 ? '' : String(n))
+      }}
     />
   )
 }
@@ -523,7 +616,25 @@ function CopyBtn({ getText, label = 'Copy' }: { getText: () => string; label?: s
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function QuoteTool() {
+  const { data: session } = useSession()
+  const userRole = (session?.user as { role?: string })?.role ?? 'staff'
+  const [signOutPending, startSignOut] = useTransition()
   const [tab, setTab] = useState<TabMode>('inbox')
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  const [isDark, setIsDark] = useState(false)
+  useEffect(() => {
+    const saved = localStorage.getItem('quotion_theme')
+    const dark = saved === 'dark'
+    setIsDark(dark)
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+  }, [])
+  function toggleTheme() {
+    const next = !isDark
+    setIsDark(next)
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light')
+    localStorage.setItem('quotion_theme', next ? 'dark' : 'light')
+  }
 
   // ── Inbox ──────────────────────────────────────────────────────────────────
   const [emails, setEmails] = useState<MockEmail[]>([])
@@ -600,8 +711,6 @@ export default function QuoteTool() {
   const [searchError, setSearchError] = useState('')
   const [selectedThread, setSelectedThread] = useState<ThreadDetail | null>(null)
   const [threadLoading, setThreadLoading] = useState(false)
-  const [threadSummary, setThreadSummary] = useState('')
-  const [summaryLoading, setSummaryLoading] = useState(false)
 
   // ── Pricing Logic ──────────────────────────────────────────────────────────
   const [pricingRates, setPricingRates] = useState<PricingLogicRate[]>([])
@@ -620,6 +729,27 @@ export default function QuoteTool() {
   const [settings, setSettings] = useState<CustomerSettings>(DEFAULT_CUSTOMER_SETTINGS)
   const [newDomain, setNewDomain] = useState('')
   const [savedAt, setSavedAt] = useState('')
+
+  // ── Team / User Management ─────────────────────────────────────────────────
+  const [teamUsers, setTeamUsers] = useState<AppUser[]>([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [addUserEmail, setAddUserEmail] = useState('')
+  const [addUserName, setAddUserName] = useState('')
+  const [addUserPassword, setAddUserPassword] = useState('')
+  const [addUserRole, setAddUserRole] = useState('staff')
+  const [addUserError, setAddUserError] = useState('')
+  const [addUserSuccess, setAddUserSuccess] = useState('')
+  const [rateRequests, setRateRequests] = useState<RateChangeRequest[]>([])
+  const [rateReqLoading, setRateReqLoading] = useState(false)
+  // Rate change request form (for staff/manager)
+  const [rcrRateKey, setRcrRateKey] = useState('')
+  const [rcrRateLabel, setRcrRateLabel] = useState('')
+  const [rcrCurrentVal, setRcrCurrentVal] = useState(0)
+  const [rcrRequestedVal, setRcrRequestedVal] = useState(0)
+  const [rcrReason, setRcrReason] = useState('')
+  const [rcrSubmitting, setRcrSubmitting] = useState(false)
+  const [rcrSuccess, setRcrSuccess] = useState('')
+  const [rcrError, setRcrError] = useState('')
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -698,7 +828,11 @@ export default function QuoteTool() {
 
   function selectEmail(id: string) {
     setSelectedEmailId(id)
-    const updated = emails.map(e => (e.id === id ? { ...e, isRead: true } : e))
+    const updated = emails.map(e =>
+      e.id === id
+        ? { ...e, isRead: true, status: e.status === 'new' ? ('in-progress' as const) : e.status }
+        : e
+    )
     persistEmails(updated)
   }
 
@@ -952,13 +1086,16 @@ export default function QuoteTool() {
     setSearchLoading(true)
     setSearchError('')
     setSelectedThread(null)
-    setThreadSummary('')
-    try {
-      const res = await fetch(`/api/ops/search?q=${encodeURIComponent(searchQuery.trim())}`)
-      const data = await res.json()
+        try {
+      const res = await fetch(
+        `/api/ops/search?q=${encodeURIComponent(searchQuery.trim())}&by=${encodeURIComponent(searchBy)}`
+      )
+      const data = await res.json() as { results?: SearchThread[]; error?: string }
+      if (data.error) throw new Error(data.error)
       setSearchResults(data.results ?? [])
-    } catch {
-      setSearchError('Search failed. Check database connection.')
+      if ((data.results ?? []).length === 0) setSearchError('')
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : 'Search failed.')
     } finally {
       setSearchLoading(false)
     }
@@ -966,10 +1103,9 @@ export default function QuoteTool() {
 
   async function loadThread(id: string) {
     setThreadLoading(true)
-    setThreadSummary('')
-    try {
-      const res = await fetch(`/api/ops/thread/${encodeURIComponent(id)}`)
-      const data = await res.json()
+        try {
+      const res = await fetch(`/api/inbox/thread/${encodeURIComponent(id)}`)
+      const data = await res.json() as ThreadDetail
       setSelectedThread(data)
     } catch {
       setSelectedThread(null)
@@ -978,20 +1114,6 @@ export default function QuoteTool() {
     }
   }
 
-  async function generateSummary(id: string) {
-    setSummaryLoading(true)
-    try {
-      const res = await fetch(`/api/ops/thread/${encodeURIComponent(id)}/summary`, {
-        method: 'POST',
-      })
-      const data = await res.json()
-      setThreadSummary(data.summary ?? data.text ?? JSON.stringify(data))
-    } catch {
-      setThreadSummary('Failed to generate summary.')
-    } finally {
-      setSummaryLoading(false)
-    }
-  }
 
   // ── Pricing Logic handlers ─────────────────────────────────────────────────
   function saveRate() {
@@ -1032,6 +1154,32 @@ export default function QuoteTool() {
 
   function resetRates() {
     const defaults = getDefaultPricingLogicCatalog()
+    const now = new Date().toISOString()
+
+    // Record a history entry for every rate whose value actually changed
+    const resetEntries: PricingHistoryEntry[] = pricingRates
+      .filter(r => {
+        const def = defaults.find(d => d.id === r.id)
+        return def && def.defaultValue !== r.currentValue
+      })
+      .map(r => {
+        const def = defaults.find(d => d.id === r.id)!
+        return {
+          id: uid(),
+          rateId: r.id,
+          label: r.label,
+          previousValue: r.currentValue,
+          newValue: def.defaultValue,
+          changedBy: 'System Reset',
+          comment: 'Rates reset to defaults',
+          changedAt: now,
+        }
+      })
+
+    if (resetEntries.length > 0) {
+      persistHistory([...resetEntries, ...pricingHistory])
+    }
+
     setPricingRates(defaults)
     localStorage.setItem('fld_pricing_logic_rates_v1', JSON.stringify(defaults))
     setSelectedRate(null)
@@ -1390,13 +1538,41 @@ export default function QuoteTool() {
     )
   }
 
+  function resetDrayage() {
+    setDCity(''); setDContainerSize('40'); setDWeight('')
+    setDExtraStops(0); setDChassisDays(0); setDWccp(0)
+    setDWaiting(0); setDLiveUnload(0)
+    setDPierPass(true); setDTcf(true); setDChassisSplit(false); setDRush(false)
+    setDResult(null); setDWarning('')
+  }
+
+  function resetTransloading() {
+    setTGroups([{ containerCount: 1, containerSize: '40ft', cargoPackaging: 'pallet', palletCount: 20, palletSize: 'normal', looseCargoCount: 0 }])
+    setTShrinkWrap(false); setTShrinkWrapPallets(0)
+    setTSeal(false); setTBol(false)
+    setTStorageEnabled(false); setTStoragePallets(0)
+    setTStoragePalletSize('normal'); setTStorageDays(30)
+    setTAfterHours(false); setTWeekend(false)
+    setTResult(null)
+  }
+
+  function resetLastMile() {
+    setLmMiles(''); setLmTruckType('straight-truck'); setLmStops(1)
+    setLmLiftgate(false); setLmResidential(false); setLmReefer(false)
+    setLmHazmat(false); setLmOversize(false); setLmHighValue(false)
+    setLmResult(null); setLmHighValueAdded(false)
+  }
+
   // ── Tab 3: Drayage ─────────────────────────────────────────────────────────
   function renderDrayage() {
     return (
       <div className="grid grid-cols-2 gap-6">
         {/* Form */}
         <div className="space-y-4">
-          <Card title="Drayage Quote Calculator">
+          <Card
+            title="Drayage Quote Calculator"
+            action={<button type="button" onClick={resetDrayage} className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-danger)] transition-colors">↺ Reset</button>}
+          >
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Label>Destination City</Label>
@@ -1427,50 +1603,23 @@ export default function QuoteTool() {
               </div>
               <div>
                 <Label>Extra Stops</Label>
-                <Input
-                  type="number"
-                  value={dExtraStops}
-                  onChange={e => setDExtraStops(parseInt(e.target.value) || 0)}
-                  min={0}
-                />
+                <NumericInput value={dExtraStops} onChange={setDExtraStops} min={0} />
               </div>
               <div>
                 <Label>Chassis Days</Label>
-                <Input
-                  type="number"
-                  value={dChassisDays}
-                  onChange={e => setDChassisDays(parseInt(e.target.value) || 0)}
-                  min={0}
-                />
+                <NumericInput value={dChassisDays} onChange={setDChassisDays} min={0} />
               </div>
               <div>
                 <Label>WCCP Chassis Days</Label>
-                <Input
-                  type="number"
-                  value={dWccp}
-                  onChange={e => setDWccp(parseInt(e.target.value) || 0)}
-                  min={0}
-                />
+                <NumericInput value={dWccp} onChange={setDWccp} min={0} />
               </div>
               <div>
                 <Label>Waiting Hours</Label>
-                <Input
-                  type="number"
-                  value={dWaiting}
-                  onChange={e => setDWaiting(parseFloat(e.target.value) || 0)}
-                  min={0}
-                  step={0.1}
-                />
+                <NumericInput value={dWaiting} onChange={setDWaiting} min={0} step={0.1} />
               </div>
               <div>
                 <Label>Live Unload Hours</Label>
-                <Input
-                  type="number"
-                  value={dLiveUnload}
-                  onChange={e => setDLiveUnload(parseFloat(e.target.value) || 0)}
-                  min={0}
-                  step={0.1}
-                />
+                <NumericInput value={dLiveUnload} onChange={setDLiveUnload} min={0} step={0.1} />
               </div>
             </div>
 
@@ -1560,7 +1709,10 @@ export default function QuoteTool() {
       <div className="grid grid-cols-2 gap-6">
         {/* Form */}
         <div className="space-y-4">
-          <Card title="Container Groups">
+          <Card
+            title="Container Groups"
+            action={<button type="button" onClick={resetTransloading} className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-danger)] transition-colors">↺ Reset</button>}
+          >
             {tGroups.map((g, i) => (
               <div key={i} className="border border-[var(--color-border)] rounded-lg p-4 mb-3">
                 <div className="flex items-center justify-between mb-3">
@@ -1578,12 +1730,7 @@ export default function QuoteTool() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Count</Label>
-                    <Input
-                      type="number"
-                      value={g.containerCount}
-                      onChange={e => updateGroup(i, { containerCount: parseInt(e.target.value) || 1 })}
-                      min={1}
-                    />
+                    <NumericInput value={g.containerCount} onChange={v => updateGroup(i, { containerCount: Math.max(1, Math.round(v)) })} min={1} />
                   </div>
                   <div>
                     <Label>Size</Label>
@@ -1611,12 +1758,7 @@ export default function QuoteTool() {
                     <>
                       <div>
                         <Label>Pallet Count</Label>
-                        <Input
-                          type="number"
-                          value={g.palletCount}
-                          onChange={e => updateGroup(i, { palletCount: parseInt(e.target.value) || 0 })}
-                          min={0}
-                        />
+                        <NumericInput value={g.palletCount} onChange={v => updateGroup(i, { palletCount: Math.round(v) })} min={0} />
                       </div>
                       <div>
                         <Label>Pallet Size</Label>
@@ -1633,12 +1775,7 @@ export default function QuoteTool() {
                   {g.cargoPackaging === 'loose-cargo' && (
                     <div className="col-span-2">
                       <Label>Loose Cargo Count (cartons)</Label>
-                      <Input
-                        type="number"
-                        value={g.looseCargoCount}
-                        onChange={e => updateGroup(i, { looseCargoCount: parseInt(e.target.value) || 0 })}
-                        min={0}
-                      />
+                      <NumericInput value={g.looseCargoCount} onChange={v => updateGroup(i, { looseCargoCount: Math.round(v) })} min={0} />
                     </div>
                   )}
                 </div>
@@ -1653,13 +1790,7 @@ export default function QuoteTool() {
               {tShrinkWrap && (
                 <div className="pl-4">
                   <Label>Shrink Wrap Pallet Count</Label>
-                  <Input
-                    type="number"
-                    value={tShrinkWrapPallets}
-                    onChange={e => setTShrinkWrapPallets(parseInt(e.target.value) || 0)}
-                    min={0}
-                    placeholder="0 = auto from groups"
-                  />
+                  <NumericInput value={tShrinkWrapPallets} onChange={setTShrinkWrapPallets} min={0} placeholder="0 = auto from groups" />
                 </div>
               )}
               <ToggleRow label="Seal" value={tSeal} onChange={setTSeal} />
@@ -1674,12 +1805,7 @@ export default function QuoteTool() {
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div>
                     <Label>Pallet Count</Label>
-                    <Input
-                      type="number"
-                      value={tStoragePallets}
-                      onChange={e => setTStoragePallets(parseInt(e.target.value) || 0)}
-                      min={0}
-                    />
+                    <NumericInput value={tStoragePallets} onChange={setTStoragePallets} min={0} />
                   </div>
                   <div>
                     <Label>Pallet Size</Label>
@@ -1693,12 +1819,7 @@ export default function QuoteTool() {
                   </div>
                   <div className="col-span-2">
                     <Label>Storage Duration (days)</Label>
-                    <Input
-                      type="number"
-                      value={tStorageDays}
-                      onChange={e => setTStorageDays(parseInt(e.target.value) || 30)}
-                      min={1}
-                    />
+                    <NumericInput value={tStorageDays} onChange={v => setTStorageDays(Math.max(1, Math.round(v)))} min={1} placeholder="30" />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <ToggleRow label="After-Hours (Mon–Fri)" value={tAfterHours} onChange={setTAfterHours} />
@@ -1797,7 +1918,10 @@ export default function QuoteTool() {
     return (
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
-          <Card title="Last-Mile Delivery Calculator">
+          <Card
+            title="Last-Mile Delivery Calculator"
+            action={<button type="button" onClick={resetLastMile} className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-danger)] transition-colors">↺ Reset</button>}
+          >
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Label>Distance (miles) *</Label>
@@ -1822,12 +1946,7 @@ export default function QuoteTool() {
               </div>
               <div>
                 <Label>Number of Stops</Label>
-                <Input
-                  type="number"
-                  value={lmStops}
-                  onChange={e => setLmStops(parseInt(e.target.value) || 1)}
-                  min={1}
-                />
+                <NumericInput value={lmStops} onChange={v => setLmStops(Math.max(1, Math.round(v)))} min={1} placeholder="1" />
               </div>
             </div>
 
@@ -1889,14 +2008,39 @@ export default function QuoteTool() {
 
   // ── Tab 6: Search ──────────────────────────────────────────────────────────
   function renderSearch() {
+    const st = selectedThread as ThreadDetail | null
+
+    function statusPill(s: string) {
+      const cls =
+        s === 'responded' || s === 'replied' ? 'bg-green-100 text-green-700'
+        : s === 'unresponded' || s === 'in-progress' ? 'bg-amber-100 text-amber-700'
+        : 'bg-gray-100 text-gray-600'
+      const label = s === 'replied' ? 'Responded' : s === 'unresponded' ? 'Unresponded' : s
+      return <span className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${cls}`}>{label}</span>
+    }
+
+    function extractQuote(at: AiThreadEntry) {
+      const processed = at.artifacts.find(a => a.artifact_type === 'processed')
+      if (!processed) return null
+      const rd = (processed.artifact_data as Record<string, unknown>).responseData as Record<string, unknown> | undefined
+      if (!rd) return null
+      const typeLabel: Record<string, string> = { drayage: 'Drayage', warehousing: 'Warehousing', 'last-mile': 'Last Mile', hybrid: 'Hybrid', general: 'General Inquiry' }
+      const t = rd.type as string
+      let value: number | null = null
+      if (t === 'drayage') value = ((rd.quote as Record<string, unknown> | null)?.subtotal as number) ?? null
+      if (t === 'warehousing') value = ((rd.result as Record<string, unknown> | null)?.total as number) ?? null
+      if (t === 'last-mile') value = ((rd.result as Record<string, unknown> | null)?.total as number) ?? null
+      if (t === 'hybrid') value = (rd.combinedTotal as number) ?? null
+      return { label: typeLabel[t] ?? t, value }
+    }
+
     return (
       <div>
-        {/* Controls */}
         <Card>
           <div className="flex gap-3 items-end">
             <div>
               <Label>Search By</Label>
-              <Select value={searchBy} onChange={e => setSearchBy(e.target.value)} className="w-40">
+              <Select value={searchBy} onChange={e => setSearchBy(e.target.value)} className="w-36">
                 <option>Subject</option>
                 <option>Thread ID</option>
                 <option>Company</option>
@@ -1908,7 +2052,11 @@ export default function QuoteTool() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doSearch()}
-                placeholder={`Search by ${searchBy.toLowerCase()}…`}
+                placeholder={
+                  searchBy === 'Thread ID' ? 'Paste thread UUID…'
+                  : searchBy === 'Company' ? 'Sender email or domain…'
+                  : 'Subject, sender, or keywords in message body…'
+                }
               />
             </div>
             <Btn onClick={doSearch} disabled={searchLoading || !searchQuery.trim()}>
@@ -1918,101 +2066,135 @@ export default function QuoteTool() {
           {searchError && <p className="mt-2 text-xs text-red-600">{searchError}</p>}
         </Card>
 
+        {!searchQuery && (
+          <p className="mt-6 text-center text-sm text-[var(--color-text-3)]">
+            Search by subject line, sender email, or any keyword from the message body.
+          </p>
+        )}
+
+        {searchResults.length === 0 && !searchLoading && searchQuery && !searchError && (
+          <p className="mt-4 text-sm text-[var(--color-text-3)]">No threads found for "{searchQuery}".</p>
+        )}
+
         {searchResults.length > 0 && (
-          <div className="flex gap-4 mt-4" style={{ minHeight: '400px' }}>
-            {/* Left: results list */}
-            <div className="w-1/3 bg-white border border-[var(--color-border)] rounded-xl overflow-y-auto">
+          <div className="flex gap-4 mt-4" style={{ minHeight: '520px' }}>
+            {/* Left list */}
+            <div className="w-1/3 bg-white border border-[var(--color-border)] rounded-xl overflow-y-auto flex-shrink-0">
               {searchResults.map(r => (
-                <div
+                <button
                   key={r.id}
-                  onClick={() => { loadThread(r.id); setThreadSummary('') }}
-                  className={`px-4 py-3 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-bg-2)] transition-colors ${
-                    selectedThread?.thread?.thread_id === r.thread_id ? 'bg-blue-50' : ''
+                  type="button"
+                  onClick={() => { loadThread(r.id) }}
+                  className={`w-full text-left px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-bg-2)] transition-colors ${
+                    st?.thread?.id === r.id ? 'bg-[var(--color-accent-lt)] border-l-2 border-l-[var(--color-accent)]' : ''
                   }`}
                 >
-                  <div className="text-xs font-mono text-[var(--color-text-3)] mb-0.5">{fmtTime(r.created_at)}</div>
-                  <div className="text-sm font-medium text-[var(--color-text-1)] truncate">{r.thread_id}</div>
-                  <div className="text-xs text-[var(--color-text-3)] mt-0.5">
-                    {r.company_name ?? '—'} · <span className="italic">{r.intent}</span> · {r.processor_type}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-mono text-[var(--color-text-3)]">{fmtTime(r.last_message_at)}</span>
+                    {statusPill(r.status)}
                   </div>
-                </div>
+                  <div className="text-sm font-semibold text-[var(--color-text-1)] truncate">{r.subject}</div>
+                  <div className="text-xs text-[var(--color-text-3)] truncate mt-0.5">{r.from}</div>
+                  <div className="flex gap-2 mt-1 text-xs text-[var(--color-text-4)]">
+                    <span>{r.message_count} msg{r.message_count !== 1 ? 's' : ''}</span>
+                    {r.reply_count > 0 && <span className="text-green-600">· {r.reply_count} repl{r.reply_count !== 1 ? 'ies' : 'y'} sent</span>}
+                  </div>
+                </button>
               ))}
             </div>
 
-            {/* Right: thread detail */}
+            {/* Right detail */}
             <div className="flex-1 bg-white border border-[var(--color-border)] rounded-xl overflow-y-auto">
-              {threadLoading && (
-                <div className="flex items-center justify-center h-40 text-sm text-[var(--color-text-3)]">Loading…</div>
-              )}
-              {!threadLoading && !selectedThread && (
-                <div className="flex items-center justify-center h-40 text-sm text-[var(--color-text-3)]">Select a thread</div>
-              )}
-              {!threadLoading && selectedThread && (
-                <div className="p-5">
-                  {/* Metadata */}
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs mb-4 pb-4 border-b border-[var(--color-border)]">
-                    <div><span className="text-[var(--color-text-3)]">Thread ID: </span><span className="font-mono">{selectedThread.thread.thread_id}</span></div>
-                    <div><span className="text-[var(--color-text-3)]">Status: </span><span className="capitalize">{selectedThread.thread.status}</span></div>
-                    <div><span className="text-[var(--color-text-3)]">Intent: </span><span className="italic">{selectedThread.thread.intent}</span></div>
-                    <div><span className="text-[var(--color-text-3)]">Processor: </span><span>{selectedThread.thread.processor_type}</span></div>
-                    {selectedThread.contact && (
-                      <>
-                        <div><span className="text-[var(--color-text-3)]">Contact: </span><span>{selectedThread.contact.name ?? '—'}</span></div>
-                        <div><span className="text-[var(--color-text-3)]">Email: </span><span className="font-mono">{selectedThread.contact.email ?? '—'}</span></div>
-                      </>
-                    )}
-                    {selectedThread.company && (
-                      <div className="col-span-2"><span className="text-[var(--color-text-3)]">Company: </span><span className="font-medium">{selectedThread.company.business_name ?? '—'}</span></div>
-                    )}
+              {threadLoading && <div className="flex items-center justify-center h-40 text-sm text-[var(--color-text-3)]">Loading…</div>}
+              {!threadLoading && !st && <div className="flex items-center justify-center h-40 text-sm text-[var(--color-text-3)]">← Select a thread</div>}
+              {!threadLoading && st && (
+                <div className="p-5 space-y-5">
+
+                  {/* Header */}
+                  <div className="pb-4 border-b border-[var(--color-border)]">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <h3 className="text-base font-bold text-[var(--color-text-1)]">{st.thread.subject}</h3>
+                      {statusPill(st.thread.status)}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                      <div><span className="text-[var(--color-text-3)]">From: </span><span className="font-mono">{st.thread.participant_from}</span></div>
+                      <div><span className="text-[var(--color-text-3)]">To: </span><span className="font-mono">{st.thread.participant_to}</span></div>
+                      <div><span className="text-[var(--color-text-3)]">Received: </span><span className="font-mono">{fmtTime(st.thread.created_at)}</span></div>
+                      <div><span className="text-[var(--color-text-3)]">Last activity: </span><span className="font-mono">{fmtTime(st.thread.last_message_at)}</span></div>
+                    </div>
+                    <div className="mt-1 text-[10px] font-mono text-[var(--color-text-4)] break-all">ID: {st.thread.id}</div>
                   </div>
 
-                  {/* Artifacts */}
-                  <div className="mb-4">
+                  {/* AI Processing */}
+                  {st.aiThreads.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-3)] mb-3">AI Quote Results</p>
+                      <div className="space-y-3">
+                        {st.aiThreads.map(at => {
+                          const q = extractQuote(at)
+                          return (
+                            <div key={at.id} className="border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg-2)]">
+                              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">{at.processor_type}</span>
+                                  <span className="text-xs italic text-[var(--color-text-3)]">{at.intent}</span>
+                                </div>
+                                {q?.value != null && (
+                                  <span className="text-sm font-bold font-mono text-green-700">Quote: {fmt$(q.value)}</span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                                {at.contact_name && <div><span className="text-[var(--color-text-3)]">Contact: </span>{at.contact_name}</div>}
+                                {at.company_name && <div><span className="text-[var(--color-text-3)]">Company: </span>{at.company_name}</div>}
+                                {at.confidence_score != null && <div><span className="text-[var(--color-text-3)]">Confidence: </span>{Math.round(at.confidence_score * 100)}%</div>}
+                                <div><span className="text-[var(--color-text-3)]">Processed: </span><span className="font-mono">{fmtTime(at.ai_created_at)}</span></div>
+                                {q && <div><span className="text-[var(--color-text-3)]">Type: </span>{q.label}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conversation */}
+                  <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-3)] mb-3">
-                      Artifacts ({selectedThread.artifacts.length})
+                      Conversation · {st.messages.length} message{st.messages.length !== 1 ? 's' : ''}
                     </p>
-                    <div className="space-y-2">
-                      {selectedThread.artifacts.map(a => (
-                        <div key={a.id} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
-                          <div className="flex items-center gap-3 px-3 py-2 bg-[var(--color-bg-2)]">
-                            <span className="text-xs font-mono text-[var(--color-text-3)]">#{a.sequence_order}</span>
-                            <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">{a.artifact_type}</span>
-                            <span className="text-xs font-mono text-[var(--color-text-3)] ml-auto">{fmtTime(a.created_at)}</span>
+                    <div className="space-y-3">
+                      {st.messages.map(msg => (
+                        <div key={msg.id} className={`rounded-lg border p-3 ${
+                          msg.direction === 'inbound'
+                            ? 'border-[var(--color-border)] bg-[var(--color-bg-2)]'
+                            : 'border-indigo-200 bg-indigo-50'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${
+                                msg.direction === 'inbound' ? 'bg-gray-200 text-gray-700' : 'bg-indigo-100 text-indigo-700'
+                              }`}>
+                                {msg.direction === 'inbound' ? '← Inbound' : '→ Outbound'}
+                              </span>
+                              <span className="text-xs text-[var(--color-text-3)] font-mono">{msg.from_email}</span>
+                            </div>
+                            <span className="text-xs font-mono text-[var(--color-text-3)]">{fmtTime(msg.received_at ?? '')}</span>
                           </div>
-                          <pre className="p-3 text-xs font-mono text-[var(--color-text-2)] bg-white overflow-auto max-h-48 whitespace-pre-wrap">
-                            {JSON.stringify(a.artifact_data, null, 2)}
-                          </pre>
+                          {msg.body_html ? (
+                            <div className="text-sm text-[var(--color-text-2)]" dangerouslySetInnerHTML={{ __html: msg.body_html }} />
+                          ) : (
+                            <p className="text-sm text-[var(--color-text-2)] whitespace-pre-wrap">{msg.body_text}</p>
+                          )}
                         </div>
                       ))}
-                      {selectedThread.artifacts.length === 0 && (
-                        <p className="text-sm text-[var(--color-text-3)]">No artifacts.</p>
-                      )}
+                      {st.messages.length === 0 && <p className="text-sm text-[var(--color-text-3)]">No messages stored.</p>}
                     </div>
                   </div>
 
-                  {/* Generate Summary */}
-                  <div>
-                    <Btn
-                      onClick={() => generateSummary(selectedThread.thread.thread_id)}
-                      disabled={summaryLoading}
-                      variant="secondary"
-                    >
-                      {summaryLoading ? 'Generating…' : 'Generate Summary'}
-                    </Btn>
-                    {threadSummary && (
-                      <div className="mt-3 p-3 bg-[var(--color-bg-2)] rounded-lg text-sm text-[var(--color-text-1)] whitespace-pre-wrap">
-                        {threadSummary}
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
           </div>
-        )}
-
-        {searchResults.length === 0 && !searchLoading && searchQuery && !searchError && (
-          <p className="mt-4 text-sm text-[var(--color-text-3)]">No results found.</p>
         )}
       </div>
     )
@@ -2022,15 +2204,32 @@ export default function QuoteTool() {
   function renderPricingLogic() {
     return (
       <div>
-        {/* Stats bar */}
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-3)] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={pricingSearch}
+            onChange={e => setPricingSearch(e.target.value)}
+            placeholder="Search rate items by name or ID…"
+            className="w-full pl-10 pr-4 py-2.5 text-sm border-2 rounded-xl bg-white focus:outline-none focus:border-indigo-400 transition-colors"
+            style={{ borderColor: pricingSearch ? 'var(--color-accent, #6366f1)' : 'var(--color-border)' }}
+          />
+          {pricingSearch && (
+            <button
+              onClick={() => setPricingSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Filters + stats bar */}
         <div className="flex items-center gap-4 mb-4">
-          <div className="flex-1">
-            <Input
-              value={pricingSearch}
-              onChange={e => setPricingSearch(e.target.value)}
-              placeholder="Search items…"
-            />
-          </div>
           <Select
             value={pricingCategory}
             onChange={e => setPricingCategory(e.target.value)}
@@ -2038,11 +2237,17 @@ export default function QuoteTool() {
           >
             {pricingCategories.map(c => <option key={c}>{c}</option>)}
           </Select>
-          <span className="text-sm text-[var(--color-text-3)] whitespace-nowrap">
-            Total Items: <strong>{filteredRates.length}</strong>
-          </span>
-          <span className="text-sm text-[var(--color-text-3)] whitespace-nowrap">
-            Changes Logged: <strong>{pricingHistory.length}</strong>
+          {pricingSearch ? (
+            <span className="text-sm font-medium text-indigo-600 whitespace-nowrap">
+              {filteredRates.length} result{filteredRates.length !== 1 ? 's' : ''} for &ldquo;{pricingSearch}&rdquo;
+            </span>
+          ) : (
+            <span className="text-sm text-[var(--color-text-3)] whitespace-nowrap">
+              Total Items: <strong>{filteredRates.length}</strong>
+            </span>
+          )}
+          <span className="text-sm text-[var(--color-text-3)] whitespace-nowrap ml-auto">
+            Modified from Default: <strong>{changesCount}</strong>
           </span>
         </div>
 
@@ -2058,6 +2263,13 @@ export default function QuoteTool() {
                 </tr>
               </thead>
               <tbody>
+                {filteredRates.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-10 text-center text-sm text-[var(--color-text-3)]">
+                      No items match &ldquo;{pricingSearch}&rdquo;
+                    </td>
+                  </tr>
+                )}
                 {filteredRates.map(rate => (
                   <tr
                     key={rate.id}
@@ -2092,7 +2304,7 @@ export default function QuoteTool() {
           <div>
             {!selectedRate ? (
               <div className="flex items-center justify-center h-64 text-sm text-[var(--color-text-3)] bg-white border border-[var(--color-border)] rounded-xl">
-                Select a rate item to edit.
+                Select a rate item to {userRole === 'staff' ? 'view or request a change.' : 'edit.'}
               </div>
             ) : (
               <Card>
@@ -2106,7 +2318,7 @@ export default function QuoteTool() {
                     <span className="font-mono font-semibold">{fmt$(selectedRate.currentValue)}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--color-text-3)]">Default: </span>
+                    <span className="text-[var(--color-text-3)]">Original: </span>
                     <span className="font-mono">{fmt$(selectedRate.defaultValue)}</span>
                   </div>
                   <div>
@@ -2133,39 +2345,92 @@ export default function QuoteTool() {
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <div>
-                    <Label>New Value ({selectedRate.unit})</Label>
-                    <Input
-                      type="number"
-                      step={0.01}
-                      value={editValue}
-                      onChange={e => setEditValue(e.target.value)}
-                    />
+                {userRole === 'staff' ? (
+                  /* Staff: request change form */
+                  <div className="space-y-3">
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      You have read-only access. Submit a request below and an admin will review it.
+                    </p>
+                    <div>
+                      <Label>Requested Value ({selectedRate.unit})</Label>
+                      <Input
+                        type="number"
+                        step={0.01}
+                        value={rcrRateKey === selectedRate.id ? rcrRequestedVal : selectedRate.currentValue}
+                        onChange={e => {
+                          setRcrRateKey(selectedRate.id)
+                          setRcrRateLabel(selectedRate.label)
+                          setRcrCurrentVal(selectedRate.currentValue)
+                          setRcrRequestedVal(parseFloat(e.target.value) || 0)
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label>Reason</Label>
+                      <Textarea rows={2} value={rcrReason} onChange={e => setRcrReason(e.target.value)} placeholder="Why do you need this change?" />
+                    </div>
+                    {rcrError && <p className="text-xs text-red-600">{rcrError}</p>}
+                    {rcrSuccess && <p className="text-xs text-green-600">{rcrSuccess}</p>}
+                    <Btn
+                      disabled={rcrSubmitting}
+                      onClick={async () => {
+                        setRcrSubmitting(true); setRcrError(''); setRcrSuccess('')
+                        try {
+                          const res = await fetch('/api/rate-requests', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              rate_key: selectedRate.id,
+                              rate_label: selectedRate.label,
+                              current_value: selectedRate.currentValue,
+                              requested_value: rcrRequestedVal,
+                              reason: rcrReason || undefined,
+                            }),
+                          })
+                          if (res.ok) { setRcrSuccess('Request submitted!'); setRcrReason('') }
+                          else { const d = await res.json(); setRcrError(d.error ?? 'Failed') }
+                        } finally { setRcrSubmitting(false) }
+                      }}
+                    >
+                      {rcrSubmitting ? 'Submitting…' : 'Submit Change Request'}
+                    </Btn>
                   </div>
-                  <div>
-                    <Label>Change Comment *</Label>
-                    <Textarea
-                      rows={2}
-                      value={editComment}
-                      onChange={e => setEditComment(e.target.value)}
-                      placeholder="Reason for change…"
-                    />
+                ) : (
+                  /* Manager / Admin: direct edit */
+                  <div className="space-y-3">
+                    <div>
+                      <Label>New Value ({selectedRate.unit})</Label>
+                      <Input
+                        type="number"
+                        step={0.01}
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Change Comment *</Label>
+                      <Textarea
+                        rows={2}
+                        value={editComment}
+                        onChange={e => setEditComment(e.target.value)}
+                        placeholder="Reason for change…"
+                      />
+                    </div>
+                    <div>
+                      <Label>Changed By *</Label>
+                      <Input
+                        value={editChangedBy || (session?.user?.name ?? session?.user?.email ?? '')}
+                        onChange={e => setEditChangedBy(e.target.value)}
+                        placeholder="Your name"
+                      />
+                    </div>
+                    {editError && <p className="text-xs text-red-600">{editError}</p>}
+                    <div className="flex gap-2">
+                      <Btn onClick={saveRate}>Save Change</Btn>
+                      <Btn variant="secondary" onClick={resetRates}>Reset Rates</Btn>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Changed By *</Label>
-                    <Input
-                      value={editChangedBy}
-                      onChange={e => setEditChangedBy(e.target.value)}
-                      placeholder="Your name"
-                    />
-                  </div>
-                  {editError && <p className="text-xs text-red-600">{editError}</p>}
-                  <div className="flex gap-2">
-                    <Btn onClick={saveRate}>Save Mock Change</Btn>
-                    <Btn variant="secondary" onClick={resetRates}>Reset Mock Rates</Btn>
-                  </div>
-                </div>
+                )}
               </Card>
             )}
           </div>
@@ -2437,6 +2702,264 @@ export default function QuoteTool() {
     )
   }
 
+  // ── Tab 10: Team (admin only) ──────────────────────────────────────────────
+  function renderTeam() {
+    async function loadTeam() {
+      setTeamLoading(true)
+      try {
+        const res = await fetch('/api/users')
+        if (res.ok) {
+          const data = await res.json()
+          setTeamUsers(data.users ?? [])
+        }
+      } finally {
+        setTeamLoading(false)
+      }
+    }
+    async function loadRateRequests() {
+      setRateReqLoading(true)
+      try {
+        const res = await fetch('/api/rate-requests')
+        if (res.ok) {
+          const data = await res.json()
+          setRateRequests(data.requests ?? [])
+        }
+      } finally {
+        setRateReqLoading(false)
+      }
+    }
+
+    async function handleAddUser(e: React.FormEvent) {
+      e.preventDefault()
+      setAddUserError('')
+      setAddUserSuccess('')
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: addUserEmail, name: addUserName, password: addUserPassword || undefined, role: addUserRole }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAddUserError(data.error ?? 'Failed to create user')
+        return
+      }
+      setAddUserSuccess(`User ${data.user.email} created.`)
+      setAddUserEmail(''); setAddUserName(''); setAddUserPassword(''); setAddUserRole('staff')
+      loadTeam()
+    }
+
+    async function toggleActive(userId: string, current: boolean) {
+      await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !current }),
+      })
+      loadTeam()
+    }
+
+    async function changeRole(userId: string, role: string) {
+      await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      })
+      loadTeam()
+    }
+
+    async function reviewRequest(reqId: string, status: 'approved' | 'rejected', note?: string) {
+      await fetch(`/api/rate-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, review_note: note }),
+      })
+      loadRateRequests()
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* User List */}
+        <Card
+          title="Team Members"
+          action={
+            <button
+              type="button"
+              onClick={loadTeam}
+              className="text-xs px-3 py-1.5 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+            >
+              {teamLoading ? 'Loading…' : '↺ Refresh'}
+            </button>
+          }
+        >
+          {teamUsers.length === 0 && !teamLoading && (
+            <div className="text-sm text-[var(--color-text-3)] py-4 text-center">
+              No users loaded.{' '}
+              <button type="button" onClick={loadTeam} className="text-blue-600 underline">Load</button>
+            </div>
+          )}
+          {teamUsers.length > 0 && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Name / Email</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Role</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Status</th>
+                  <th className="text-left py-2 text-xs font-medium text-[var(--color-text-3)] uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamUsers.map(u => (
+                  <tr key={u.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="py-2.5 pr-4">
+                      <div className="font-medium text-[var(--color-text-1)]">{u.name ?? '—'}</div>
+                      <div className="text-xs text-[var(--color-text-3)]">{u.email}</div>
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      {u.id === session?.user?.id ? (
+                        <span className="inline-flex px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700 font-medium">{u.role}</span>
+                      ) : (
+                        <select
+                          value={u.role}
+                          onChange={e => changeRole(u.id, e.target.value)}
+                          className="text-xs px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-bg-1)] text-[var(--color-text-1)]"
+                        >
+                          <option value="staff">staff</option>
+                          <option value="manager">manager</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {u.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      {u.id !== session?.user?.id && (
+                        <button
+                          type="button"
+                          onClick={() => toggleActive(u.id, u.is_active)}
+                          className="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+                        >
+                          {u.is_active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        {/* Add User */}
+        <Card title="Add New User">
+          <form onSubmit={handleAddUser} className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" required value={addUserEmail} onChange={e => setAddUserEmail(e.target.value)} placeholder="user@example.com" />
+            </div>
+            <div>
+              <Label>Name</Label>
+              <Input value={addUserName} onChange={e => setAddUserName(e.target.value)} placeholder="Full name" />
+            </div>
+            <div>
+              <Label>Temporary Password</Label>
+              <Input type="password" value={addUserPassword} onChange={e => setAddUserPassword(e.target.value)} placeholder="Leave blank for Google-only" />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={addUserRole} onChange={e => setAddUserRole(e.target.value)}>
+                <option value="staff">Staff</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </Select>
+            </div>
+            {addUserError && <p className="col-span-2 text-xs text-red-600">{addUserError}</p>}
+            {addUserSuccess && <p className="col-span-2 text-xs text-green-600">{addUserSuccess}</p>}
+            <div className="col-span-2">
+              <Btn type="submit">Create User</Btn>
+            </div>
+          </form>
+        </Card>
+
+        {/* Rate Change Requests */}
+        <Card
+          title="Rate Change Requests"
+          action={
+            <button
+              type="button"
+              onClick={loadRateRequests}
+              className="text-xs px-3 py-1.5 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+            >
+              {rateReqLoading ? 'Loading…' : '↺ Refresh'}
+            </button>
+          }
+        >
+          {rateRequests.length === 0 && !rateReqLoading && (
+            <div className="text-sm text-[var(--color-text-3)] py-4 text-center">
+              No requests.{' '}
+              <button type="button" onClick={loadRateRequests} className="text-blue-600 underline">Load</button>
+            </div>
+          )}
+          {rateRequests.length > 0 && (
+            <div className="space-y-3">
+              {rateRequests.map(req => (
+                <div key={req.id} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-2)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-sm text-[var(--color-text-1)]">{req.rate_label}</p>
+                      <p className="text-xs text-[var(--color-text-3)] mt-0.5 font-mono">{req.rate_key}</p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1">
+                        <span className="font-mono">{fmt$(req.current_value)}</span>
+                        {' → '}
+                        <span className="font-mono font-semibold text-blue-700">{fmt$(req.requested_value)}</span>
+                        {' by '}
+                        <span className="font-medium">{req.requester_name ?? req.requester_email}</span>
+                      </p>
+                      {req.reason && <p className="text-xs text-[var(--color-text-3)] mt-1 italic">&ldquo;{req.reason}&rdquo;</p>}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        req.status === 'pending' ? 'bg-amber-100 text-amber-700'
+                        : req.status === 'approved' ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-600'
+                      }`}>
+                        {req.status}
+                      </span>
+                      {req.status === 'pending' && (
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => reviewRequest(req.id, 'approved')}
+                            className="text-xs px-2.5 py-1 rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => reviewRequest(req.id, 'rejected')}
+                            className="text-xs px-2.5 py-1 rounded bg-red-500 hover:bg-red-600 text-white transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                      {req.reviewed_at && (
+                        <p className="text-xs text-[var(--color-text-3)]">
+                          by {req.reviewer_name ?? '—'} on {fmtTime(req.reviewed_at)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    )
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2451,6 +2974,7 @@ export default function QuoteTool() {
     'pricing-logic': renderPricingLogic,
     'pricing-history': renderPricingHistory,
     customer: renderCustomer,
+    team: renderTeam,
   }
 
   const unreadCount = emails.filter(e => !e.isRead).length
@@ -2464,7 +2988,7 @@ export default function QuoteTool() {
           {/* Left: brand */}
           <div className="flex items-center gap-3 flex-shrink-0 mr-4">
             <span className="font-semibold text-sm text-[var(--color-text-1)] whitespace-nowrap">
-              Quoton
+              QuotionAI
             </span>
             <span className="flex items-center gap-1.5 text-xs text-green-700">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -2472,9 +2996,9 @@ export default function QuoteTool() {
             </span>
           </div>
 
-          {/* Center: tabs */}
+          {/* Center: tabs — filtered by role */}
           <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
-            {TABS.map(t => (
+            {TABS.filter(t => !t.minRole || roleLevel(userRole) >= roleLevel(t.minRole)).map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -2499,16 +3023,42 @@ export default function QuoteTool() {
             ))}
           </div>
 
-          {/* Right: refresh (inbox only) */}
-          {tab === 'inbox' && (
+          {/* Right: refresh + theme + user/sign-out */}
+          <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+            {tab === 'inbox' && (
+              <button
+                type="button"
+                onClick={() => { loadRealEmails() }}
+                className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+              >
+                ↺ Refresh
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => { loadRealEmails() }}
-              className="ml-3 flex-shrink-0 px-3 py-1.5 text-xs border border-[var(--color-border)] rounded hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+              onClick={toggleTheme}
+              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors select-none"
             >
-              ↺ Refresh
+              {isDark ? '☀ Light' : '☾ Dark'}
             </button>
-          )}
+            {session?.user && (
+              <div className="flex items-center gap-2 pl-2 border-l border-[var(--color-border)]">
+                <span className="text-xs text-[var(--color-text-3)] hidden sm:block max-w-[120px] truncate">
+                  {session.user.name ?? session.user.email}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium uppercase">{userRole}</span>
+                <button
+                  type="button"
+                  disabled={signOutPending}
+                  onClick={() => startSignOut(() => { signOut({ callbackUrl: '/login' }) })}
+                  className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-[var(--color-text-2)] transition-colors"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

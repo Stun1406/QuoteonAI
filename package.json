@@ -13,11 +13,14 @@
     "db:test-phase2": "tsx scripts/test-phase2.ts",
     "test:drayage": "tsx lib/pricing/drayage.test.ts",
     "test:transloading": "tsx lib/pricing/transloading.test.ts",
-    "test:webhook": "tsx scripts/test-email-webhook.ts"
+    "test:webhook": "tsx scripts/test-email-webhook.ts",
+    "auth:seed": "tsx scripts/seed-admins.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "bcryptjs": "^3.0.3",
     "next": "15.2.3",
+    "next-auth": "5.0.0-beta.30",
     "openai": "^6.27.0",
     "postal-mime": "^2.6.0",
     "react": "^19.0.0",
@@ -26,6 +29,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
