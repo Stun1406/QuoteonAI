@@ -19,14 +19,14 @@ import type { LastMileExtraction } from '@/lib/types/processor'
 type TabMode =
   | 'inbox'
   | 'ai-review'
-  | 'drayage'
-  | 'transloading'
-  | 'last-mile'
+  | 'quote-builder'
   | 'search'
   | 'pricing-logic'
   | 'pricing-history'
   | 'customer'
   | 'team'
+
+type QuoteBuilderSubTab = 'drayage' | 'transloading' | 'last-mile'
 
 type AppUser = {
   id: string; email: string; name: string | null; role: string; is_active: boolean
@@ -171,15 +171,13 @@ type ThreadDetail = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TABS: { id: TabMode; label: string; minRole?: string }[] = [
-  { id: 'inbox', label: 'Message Inbox (AI)' },
+  { id: 'inbox', label: 'Inbox' },
   { id: 'ai-review', label: 'AI Quote' },
-  { id: 'drayage', label: 'Drayage Quote Builder' },
-  { id: 'transloading', label: 'Warehouse/Transloading Quote Builder' },
-  { id: 'last-mile', label: 'Last-Mile Delivery' },
-  { id: 'search', label: 'Search Threads' },
+  { id: 'quote-builder', label: 'Quote Builder' },
+  { id: 'search', label: 'Search' },
   { id: 'pricing-logic', label: 'Rate Sheet' },
-  { id: 'pricing-history', label: 'Change History', minRole: 'manager' },
-  { id: 'customer', label: 'Business Settings', minRole: 'manager' },
+  { id: 'pricing-history', label: 'History', minRole: 'manager' },
+  { id: 'customer', label: 'Settings', minRole: 'manager' },
   { id: 'team', label: 'Team', minRole: 'admin' },
 ]
 
@@ -620,6 +618,7 @@ export default function QuoteTool() {
   const userRole = (session?.user as { role?: string })?.role ?? 'staff'
   const [signOutPending, startSignOut] = useTransition()
   const [tab, setTab] = useState<TabMode>('inbox')
+  const [qbSubTab, setQbSubTab] = useState<QuoteBuilderSubTab>('drayage')
   const [profileOpen, setProfileOpen] = useState(false)
 
   // ── Theme ──────────────────────────────────────────────────────────────────
@@ -3054,12 +3053,41 @@ export default function QuoteTool() {
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════════════════════════
 
+  function renderQuoteBuilder() {
+    const subTabs: { id: QuoteBuilderSubTab; label: string }[] = [
+      { id: 'drayage', label: 'Drayage' },
+      { id: 'transloading', label: 'Warehouse / Transloading' },
+      { id: 'last-mile', label: 'Last-Mile Delivery' },
+    ]
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-6 border-b border-[var(--color-border)] pb-3">
+          {subTabs.map(st => (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => setQbSubTab(st.id)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                qbSubTab === st.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-[var(--color-text-2)] border border-[var(--color-border)] hover:bg-[var(--color-bg-2)]'
+              }`}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+        {qbSubTab === 'drayage' && renderDrayage()}
+        {qbSubTab === 'transloading' && renderTransloading()}
+        {qbSubTab === 'last-mile' && renderLastMile()}
+      </div>
+    )
+  }
+
   const tabContent: Record<TabMode, () => React.ReactNode> = {
     inbox: renderInbox,
     'ai-review': renderAiReview,
-    drayage: renderDrayage,
-    transloading: renderTransloading,
-    'last-mile': renderLastMile,
+    'quote-builder': renderQuoteBuilder,
     search: renderSearch,
     'pricing-logic': renderPricingLogic,
     'pricing-history': renderPricingHistory,
