@@ -620,6 +620,7 @@ export default function QuoteTool() {
   const userRole = (session?.user as { role?: string })?.role ?? 'staff'
   const [signOutPending, startSignOut] = useTransition()
   const [tab, setTab] = useState<TabMode>('inbox')
+  const [profileOpen, setProfileOpen] = useState(false)
 
   // ── Theme ──────────────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(false)
@@ -3128,19 +3129,35 @@ export default function QuoteTool() {
               {isDark ? '☀ Light' : '☾ Dark'}
             </button>
             {session?.user && (
-              <div className="flex items-center gap-2 pl-2 border-l border-[var(--color-border)]">
-                <span className="text-xs text-[var(--color-text-3)] hidden sm:block max-w-[120px] truncate">
-                  {session.user.name ?? session.user.email}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium uppercase">{userRole}</span>
+              <div className="relative pl-2 border-l border-[var(--color-border)]">
                 <button
                   type="button"
-                  disabled={signOutPending}
-                  onClick={() => startSignOut(() => { signOut({ callbackUrl: '/login' }) })}
-                  className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-[var(--color-text-2)] transition-colors"
+                  onClick={() => setProfileOpen(o => !o)}
+                  className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center hover:bg-blue-700 transition-colors select-none"
+                  title={session.user.name ?? session.user.email ?? ''}
                 >
-                  Sign out
+                  {(session.user.name ?? session.user.email ?? '?')[0].toUpperCase()}
                 </button>
+                {profileOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                    <div className="absolute right-0 top-9 z-50 w-52 bg-white border border-[var(--color-border)] rounded-lg shadow-lg py-1">
+                      <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
+                        <p className="text-sm font-medium text-[var(--color-text-1)] truncate">{session.user.name ?? '—'}</p>
+                        <p className="text-xs text-[var(--color-text-3)] truncate mt-0.5">{session.user.email}</p>
+                        <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium uppercase">{userRole}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={signOutPending}
+                        onClick={() => { setProfileOpen(false); startSignOut(() => { signOut({ callbackUrl: '/login' }) }) }}
+                        className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
