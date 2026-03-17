@@ -36,10 +36,13 @@ export async function GET() {
   return NextResponse.json({ requests: rows })
 }
 
-// POST /api/rate-requests — submit a new request (any logged-in user)
+// POST /api/rate-requests — submit a new request (manager and admin only)
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as { role?: string })?.role
+  if (role === 'staff') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json() as {
     rate_key: string; rate_label: string

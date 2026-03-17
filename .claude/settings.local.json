@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(cat /c/LithiumQ/quoteon/quote-engine/migrations/*.sql)"
+    ]
+  }
+}

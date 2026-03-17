@@ -739,6 +739,11 @@ export default function QuoteTool() {
   const [addUserRole, setAddUserRole] = useState('staff')
   const [addUserError, setAddUserError] = useState('')
   const [addUserSuccess, setAddUserSuccess] = useState('')
+  const [knownPasswords, setKnownPasswords] = useState<Record<string, string>>({})
+  const [resetPwUserId, setResetPwUserId] = useState<string | null>(null)
+  const [resetPwValue, setResetPwValue] = useState('')
+  const [resetPwLoading, setResetPwLoading] = useState(false)
+  const [revealPw, setRevealPw] = useState<Record<string, boolean>>({})
   const [rateRequests, setRateRequests] = useState<RateChangeRequest[]>([])
   const [rateReqLoading, setRateReqLoading] = useState(false)
   // Rate change request form (for staff/manager)
@@ -2304,7 +2309,7 @@ export default function QuoteTool() {
           <div>
             {!selectedRate ? (
               <div className="flex items-center justify-center h-64 text-sm text-[var(--color-text-3)] bg-white border border-[var(--color-border)] rounded-xl">
-                Select a rate item to {userRole === 'staff' ? 'view or request a change.' : 'edit.'}
+                Select a rate item to {userRole === 'staff' ? 'view.' : 'edit.'}
               </div>
             ) : (
               <Card>
@@ -2346,55 +2351,10 @@ export default function QuoteTool() {
                 </div>
 
                 {userRole === 'staff' ? (
-                  /* Staff: request change form */
-                  <div className="space-y-3">
-                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      You have read-only access. Submit a request below and an admin will review it.
-                    </p>
-                    <div>
-                      <Label>Requested Value ({selectedRate.unit})</Label>
-                      <Input
-                        type="number"
-                        step={0.01}
-                        value={rcrRateKey === selectedRate.id ? rcrRequestedVal : selectedRate.currentValue}
-                        onChange={e => {
-                          setRcrRateKey(selectedRate.id)
-                          setRcrRateLabel(selectedRate.label)
-                          setRcrCurrentVal(selectedRate.currentValue)
-                          setRcrRequestedVal(parseFloat(e.target.value) || 0)
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label>Reason</Label>
-                      <Textarea rows={2} value={rcrReason} onChange={e => setRcrReason(e.target.value)} placeholder="Why do you need this change?" />
-                    </div>
-                    {rcrError && <p className="text-xs text-red-600">{rcrError}</p>}
-                    {rcrSuccess && <p className="text-xs text-green-600">{rcrSuccess}</p>}
-                    <Btn
-                      disabled={rcrSubmitting}
-                      onClick={async () => {
-                        setRcrSubmitting(true); setRcrError(''); setRcrSuccess('')
-                        try {
-                          const res = await fetch('/api/rate-requests', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              rate_key: selectedRate.id,
-                              rate_label: selectedRate.label,
-                              current_value: selectedRate.currentValue,
-                              requested_value: rcrRequestedVal,
-                              reason: rcrReason || undefined,
-                            }),
-                          })
-                          if (res.ok) { setRcrSuccess('Request submitted!'); setRcrReason('') }
-                          else { const d = await res.json(); setRcrError(d.error ?? 'Failed') }
-                        } finally { setRcrSubmitting(false) }
-                      }}
-                    >
-                      {rcrSubmitting ? 'Submitting…' : 'Submit Change Request'}
-                    </Btn>
-                  </div>
+                  /* Staff: read-only */
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    You have read-only access to the rate sheet. Contact a manager or admin to request changes.
+                  </p>
                 ) : (
                   /* Manager / Admin: direct edit */
                   <div className="space-y-3">
@@ -2743,7 +2703,11 @@ export default function QuoteTool() {
         setAddUserError(data.error ?? 'Failed to create user')
         return
       }
-      setAddUserSuccess(`User ${data.user.email} created.`)
+      const pw = addUserPassword || '(Google-only — no password set)'
+      if (addUserPassword && data.user?.id) {
+        setKnownPasswords(prev => ({ ...prev, [data.user.id]: addUserPassword }))
+      }
+      setAddUserSuccess(`User ${data.user.email} created. Password: ${pw}`)
       setAddUserEmail(''); setAddUserName(''); setAddUserPassword(''); setAddUserRole('staff')
       loadTeam()
     }
@@ -2764,6 +2728,22 @@ export default function QuoteTool() {
         body: JSON.stringify({ role }),
       })
       loadTeam()
+    }
+
+    async function handleResetPassword(userId: string) {
+      if (!resetPwValue.trim()) return
+      setResetPwLoading(true)
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: resetPwValue }),
+      })
+      if (res.ok) {
+        setKnownPasswords(prev => ({ ...prev, [userId]: resetPwValue }))
+        setResetPwUserId(null)
+        setResetPwValue('')
+      }
+      setResetPwLoading(false)
     }
 
     async function reviewRequest(reqId: string, status: 'approved' | 'rejected', note?: string) {
@@ -2801,6 +2781,7 @@ export default function QuoteTool() {
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Name / Email</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Password</th>
                   <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Role</th>
                   <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-3)] uppercase">Status</th>
                   <th className="text-left py-2 text-xs font-medium text-[var(--color-text-3)] uppercase">Actions</th>
@@ -2812,6 +2793,62 @@ export default function QuoteTool() {
                     <td className="py-2.5 pr-4">
                       <div className="font-medium text-[var(--color-text-1)]">{u.name ?? '—'}</div>
                       <div className="text-xs text-[var(--color-text-3)]">{u.email}</div>
+                    </td>
+                    <td className="py-2.5 pr-4 min-w-[180px]">
+                      {resetPwUserId === u.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={resetPwValue}
+                            onChange={e => setResetPwValue(e.target.value)}
+                            placeholder="New password"
+                            className="text-xs px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-bg-1)] text-[var(--color-text-1)] w-28"
+                          />
+                          <button
+                            type="button"
+                            disabled={resetPwLoading}
+                            onClick={() => handleResetPassword(u.id)}
+                            className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setResetPwUserId(null); setResetPwValue('') }}
+                            className="text-xs px-2 py-1 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : knownPasswords[u.id] ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono text-[var(--color-text-1)]">
+                            {revealPw[u.id] ? knownPasswords[u.id] : '••••••••'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRevealPw(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors"
+                          >
+                            {revealPw[u.id] ? 'Hide' : 'Show'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setResetPwUserId(u.id); setResetPwValue('') }}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setResetPwUserId(u.id); setResetPwValue('') }}
+                          className="text-xs px-2 py-0.5 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-3)] transition-colors"
+                        >
+                          Set Password
+                        </button>
+                      )}
                     </td>
                     <td className="py-2.5 pr-4">
                       {u.id === session?.user?.id ? (
@@ -2880,6 +2917,58 @@ export default function QuoteTool() {
               <Btn type="submit">Create User</Btn>
             </div>
           </form>
+        </Card>
+
+        {/* Permissions Table */}
+        <Card title="Role Permissions">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="text-left py-2 pr-6 font-medium text-[var(--color-text-3)] uppercase">Permission</th>
+                  <th className="text-center py-2 px-4 font-medium text-[var(--color-text-3)] uppercase">Staff</th>
+                  <th className="text-center py-2 px-4 font-medium text-[var(--color-text-3)] uppercase">Manager</th>
+                  <th className="text-center py-2 px-4 font-medium text-[var(--color-text-3)] uppercase">Admin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Message Inbox (AI)', staff: true, manager: true, admin: true },
+                  { label: 'AI Quote tab', staff: true, manager: true, admin: true },
+                  { label: 'Drayage Quote Builder', staff: true, manager: true, admin: true },
+                  { label: 'Warehouse / Transloading Quote Builder', staff: true, manager: true, admin: true },
+                  { label: 'Last-Mile Delivery tab', staff: true, manager: true, admin: true },
+                  { label: 'Search Threads', staff: true, manager: true, admin: true },
+                  { label: 'Rate Sheet — view', staff: true, manager: true, admin: true },
+                  { label: 'Rate Sheet — edit rates directly', staff: false, manager: true, admin: true },
+                  { label: 'Rate Sheet — submit change request', staff: false, manager: false, admin: false },
+                  { label: 'Change History tab', staff: false, manager: true, admin: true },
+                  { label: 'Business Settings tab', staff: false, manager: true, admin: true },
+                  { label: 'Team tab', staff: false, manager: false, admin: true },
+                  { label: 'View all users', staff: false, manager: false, admin: true },
+                  { label: 'Create users', staff: false, manager: false, admin: true },
+                  { label: 'Change user roles', staff: false, manager: false, admin: true },
+                  { label: 'Deactivate / reactivate users', staff: false, manager: false, admin: true },
+                  { label: 'View & reset user passwords', staff: false, manager: false, admin: true },
+                  { label: 'View all rate change requests', staff: false, manager: true, admin: true },
+                  { label: 'Approve / reject rate change requests', staff: false, manager: false, admin: true },
+                  { label: '/ops dashboard & activity feed', staff: false, manager: true, admin: true },
+                ].map((row, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-bg-2)]">
+                    <td className="py-2 pr-6 text-[var(--color-text-2)]">{row.label}</td>
+                    {(['staff', 'manager', 'admin'] as const).map(role => (
+                      <td key={role} className="py-2 px-4 text-center">
+                        {row[role]
+                          ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-700 font-bold">✓</span>
+                          : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-50 text-red-400 font-bold">✕</span>
+                        }
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* Rate Change Requests */}
@@ -2990,14 +3079,10 @@ export default function QuoteTool() {
             <span className="font-semibold text-sm text-[var(--color-text-1)] whitespace-nowrap">
               QuotionAI
             </span>
-            <span className="flex items-center gap-1.5 text-xs text-green-700">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              System Online
-            </span>
           </div>
 
           {/* Center: tabs — filtered by role */}
-          <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+          <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
             {TABS.filter(t => !t.minRole || roleLevel(userRole) >= roleLevel(t.minRole)).map(t => (
               <button
                 key={t.id}
