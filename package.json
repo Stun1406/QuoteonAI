@@ -27,6 +27,11 @@
     "react-dom": "^19.0.0",
     "resend": "latest"
   },
+  "pnpm": {
+    "overrides": {
+      "next": "^15.5.13"
+    }
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
