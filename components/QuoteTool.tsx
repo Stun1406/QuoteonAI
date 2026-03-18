@@ -1125,7 +1125,9 @@ export default function QuoteTool() {
     if (!selectedRate) return
     if (!editValue.trim()) { setEditError('New value is required.'); return }
     if (!editComment.trim()) { setEditError('Change comment is required.'); return }
-    if (!editChangedBy.trim()) { setEditError('"Changed by" is required.'); return }
+
+    const changedBy = editChangedBy.trim() || session?.user?.name?.trim() || session?.user?.email?.trim() || ''
+    if (!changedBy) { setEditError('"Changed by" is required.'); return }
 
     const newVal = parseFloat(editValue)
     if (isNaN(newVal)) { setEditError('Value must be a number.'); return }
@@ -1145,7 +1147,7 @@ export default function QuoteTool() {
       label: selectedRate.label,
       previousValue: selectedRate.currentValue,
       newValue: newVal,
-      changedBy: editChangedBy,
+      changedBy,
       comment: editComment,
       changedAt: now,
     }
@@ -1188,6 +1190,20 @@ export default function QuoteTool() {
     setPricingRates(defaults)
     localStorage.setItem('fld_pricing_logic_rates_v1', JSON.stringify(defaults))
     setSelectedRate(null)
+  }
+
+  // ── Rate Requests ──────────────────────────────────────────────────────────
+  async function loadRateRequests() {
+    setRateReqLoading(true)
+    try {
+      const res = await fetch('/api/rate-requests')
+      if (res.ok) {
+        const data = await res.json()
+        setRateRequests(data.requests ?? [])
+      }
+    } finally {
+      setRateReqLoading(false)
+    }
   }
 
   // ── Customer Settings handlers ─────────────────────────────────────────────
@@ -2445,6 +2461,64 @@ export default function QuoteTool() {
             )}
           </div>
         </div>
+
+        {/* Manager: My Rate Change Requests */}
+        {userRole === 'manager' && (
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-[var(--color-text-1)]">My Rate Change Requests</h3>
+              <button
+                type="button"
+                onClick={loadRateRequests}
+                className="text-xs px-3 py-1.5 rounded border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] text-[var(--color-text-2)] transition-colors"
+              >
+                {rateReqLoading ? 'Loading…' : '↺ Refresh'}
+              </button>
+            </div>
+            {rateRequests.length === 0 && !rateReqLoading && (
+              <div className="text-sm text-[var(--color-text-3)] py-4 text-center bg-white border border-[var(--color-border)] rounded-xl">
+                No requests yet.{' '}
+                <button type="button" onClick={loadRateRequests} className="text-blue-600 underline">Load</button>
+              </div>
+            )}
+            {rateRequests.length > 0 && (
+              <div className="space-y-2">
+                {rateRequests.map(req => (
+                  <div key={req.id} className="p-3 rounded-lg border border-[var(--color-border)] bg-white flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-sm text-[var(--color-text-1)]">{req.rate_label}</p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-0.5">
+                        <span className="font-mono">{fmt$(req.current_value)}</span>
+                        {' → '}
+                        <span className="font-mono font-semibold text-blue-700">{fmt$(req.requested_value)}</span>
+                      </p>
+                      {req.reason && <p className="text-xs text-[var(--color-text-3)] mt-0.5 italic">&ldquo;{req.reason}&rdquo;</p>}
+                      {req.review_note && (
+                        <p className="text-xs text-[var(--color-text-3)] mt-0.5">
+                          Admin note: <span className="italic">{req.review_note}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        req.status === 'pending' ? 'bg-amber-100 text-amber-700'
+                        : req.status === 'approved' ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-600'
+                      }`}>
+                        {req.status}
+                      </span>
+                      {req.reviewed_at && (
+                        <p className="text-xs text-[var(--color-text-3)]">
+                          by {req.reviewer_name ?? '—'} on {fmtTime(req.reviewed_at)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -2726,19 +2800,6 @@ export default function QuoteTool() {
         setTeamLoading(false)
       }
     }
-    async function loadRateRequests() {
-      setRateReqLoading(true)
-      try {
-        const res = await fetch('/api/rate-requests')
-        if (res.ok) {
-          const data = await res.json()
-          setRateRequests(data.requests ?? [])
-        }
-      } finally {
-        setRateReqLoading(false)
-      }
-    }
-
     async function handleAddUser(e: React.FormEvent) {
       e.preventDefault()
       setAddUserError('')
@@ -2802,6 +2863,30 @@ export default function QuoteTool() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, review_note: note }),
       })
+      if (status === 'approved') {
+        const req = rateRequests.find(r => r.id === reqId)
+        if (req) {
+          const now = new Date().toISOString()
+          const updated = pricingRates.map(r =>
+            r.id === req.rate_key
+              ? { ...r, currentValue: req.requested_value, updatedAt: now, lastComment: req.reason ?? 'Approved rate change request' }
+              : r
+          )
+          setPricingRates(updated)
+          localStorage.setItem('fld_pricing_logic_rates_v1', JSON.stringify(updated))
+          const entry: PricingHistoryEntry = {
+            id: uid(),
+            rateId: req.rate_key,
+            label: req.rate_label,
+            previousValue: req.current_value,
+            newValue: req.requested_value,
+            changedBy: session?.user?.name ?? session?.user?.email ?? 'Admin',
+            comment: `Approved: ${req.reason ?? 'Rate change request'}`,
+            changedAt: now,
+          }
+          persistHistory([entry, ...pricingHistory])
+        }
+      }
       loadRateRequests()
     }
 
@@ -2990,8 +3075,8 @@ export default function QuoteTool() {
                   { label: 'Last-Mile Delivery tab', staff: true, manager: true, admin: true },
                   { label: 'Search Threads', staff: true, manager: true, admin: true },
                   { label: 'Rate Sheet — view', staff: true, manager: true, admin: true },
-                  { label: 'Rate Sheet — edit rates directly', staff: false, manager: true, admin: true },
-                  { label: 'Rate Sheet — submit change request', staff: false, manager: false, admin: false },
+                  { label: 'Rate Sheet — edit rates directly', staff: false, manager: false, admin: true },
+                  { label: 'Rate Sheet — submit change request', staff: false, manager: true, admin: false },
                   { label: 'Change History tab', staff: false, manager: true, admin: true },
                   { label: 'Business Settings tab', staff: false, manager: true, admin: true },
                   { label: 'Team tab', staff: false, manager: false, admin: true },
