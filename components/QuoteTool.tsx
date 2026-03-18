@@ -1064,7 +1064,7 @@ export default function QuoteTool() {
   function calculateLastMile() {
     const extraction: LastMileExtraction = {
       miles: lmMiles ? parseFloat(lmMiles) : null,
-      stops: lmStops,
+      stops: Math.max(1, lmStops),
       liftgate: lmLiftgate,
       residential: lmResidential,
       reefer: lmReefer,
@@ -1795,7 +1795,7 @@ export default function QuoteTool() {
                   )}
                   {g.cargoPackaging === 'loose-cargo' && (
                     <div className="col-span-2">
-                      <Label>Loose Cargo Count (cartons)</Label>
+                      <Label>Loose Cargo Count (pieces)</Label>
                       <NumericInput value={g.looseCargoCount} onChange={v => updateGroup(i, { looseCargoCount: Math.round(v) })} min={0} />
                     </div>
                   )}
@@ -1819,9 +1819,9 @@ export default function QuoteTool() {
             </div>
           </Card>
 
-          <Card title="Storage">
+          <Card title="Storage and Warehousing">
             <div className="space-y-2">
-              <ToggleRow label="Enable Storage" value={tStorageEnabled} onChange={setTStorageEnabled} />
+              <ToggleRow label="Enable Storage and Warehousing" value={tStorageEnabled} onChange={setTStorageEnabled} />
               {tStorageEnabled && (
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div>
@@ -1967,7 +1967,7 @@ export default function QuoteTool() {
               </div>
               <div>
                 <Label>Number of Stops</Label>
-                <NumericInput value={lmStops} onChange={v => setLmStops(Math.max(1, Math.round(v)))} min={1} placeholder="1" />
+                <NumericInput value={lmStops} onChange={v => setLmStops(Math.round(v))} min={1} placeholder="1" />
               </div>
             </div>
 

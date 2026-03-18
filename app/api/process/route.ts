@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getTenantProjectContext } from '@/lib/db/context'
 import { preprocessMessage } from '@/lib/llm/preprocessor'
 import { resolveOrCreateCompanyContact } from '@/lib/db/services/company-contact-service'
-import { createThread, addArtifactToThread, updateThreadContactCompany, updateThreadProcessorType, updateThreadProcessingTime, getMessageThreadByThreadId } from '@/lib/db/services/thread-service'
-import { updateThreadIntent } from '@/lib/db/tables/thread'
+import { addArtifactToThread, updateThreadContactCompany, updateThreadProcessorType, updateThreadProcessingTime, getMessageThreadByThreadId } from '@/lib/db/services/thread-service'
+import { updateThreadIntent, createMessageThread, generateThreadId } from '@/lib/db/tables/thread'
 import { getArtifactsByThreadId } from '@/lib/db/tables/artifact'
 import { buildThreadContextFromArtifacts } from '@/lib/llm/thread-context'
 import { routeMessage } from '@/lib/routing/intent-router'
@@ -56,46 +56,39 @@ export async function POST(req: NextRequest) {
       ? `${priorContext}\n\nUser follow-up:\n${text}`
       : text
 
-    // Create preliminary thread if new
-    // We need a threadId for LLM tracking — create it first
-    // Store inbound artifact first requires a threadId
-    // So we preprocess first to get intent, then create thread
+    // For new threads: create a preliminary DB record first so LLM tracking
+    // has a valid UUID FK reference in llm_calls.thread_id.
+    // For existing threads: reuse the existing record.
+    let thread
+    if (existingThread && threadUuid) {
+      thread = existingThread
+    } else {
+      thread = await createMessageThread({
+        tenantId,
+        projectId,
+        threadId: generateThreadId(),
+        intent: 'pending',
+        processorType: 'pending',
+        isForwarded: false,
+      })
+      threadUuid = thread.id
+    }
 
-    // Preprocess
-    const preprocessStartTime = Date.now()
-
-    // Temporarily use a placeholder threadId for LLM tracking if new thread
-    // We'll create the actual thread after preprocessing
-    let tempThreadId = threadUuid ?? `TEMP_${Date.now()}`
-
+    // Preprocess with real thread UUID so llm_calls FK is satisfied
     const preprocessResult = await preprocessMessage(messageWithContext, {
       tenantId,
       projectId,
-      threadId: tempThreadId,
+      threadId: threadUuid,
     })
 
     // Resolve company/contact
     const { company, contact } = await resolveOrCreateCompanyContact(tenantId, preprocessResult.contactInfo)
 
-    // Create or use existing thread
-    let thread
-    if (existingThread && threadUuid) {
-      thread = existingThread
-      // Update contact/company if newly resolved
-      if (contact?.id || company?.id) {
-        await updateThreadContactCompany(threadUuid, contact?.id ?? null, company?.id ?? null)
-      }
-      await updateThreadIntent(threadUuid, preprocessResult.intent, preprocessResult.isForwarded, preprocessResult.confidence)
-    } else {
-      thread = await createThread({
-        tenantId,
-        projectId,
-        contactId: contact?.id,
-        companyId: company?.id,
-        preprocessResult,
-      })
-      threadUuid = thread.id
+    // Update thread with resolved data
+    if (contact?.id || company?.id) {
+      await updateThreadContactCompany(threadUuid, contact?.id ?? null, company?.id ?? null)
     }
+    await updateThreadIntent(threadUuid, preprocessResult.intent, preprocessResult.isForwarded, preprocessResult.confidence)
 
     // Store INBOUND artifact
     await addArtifactToThread({
