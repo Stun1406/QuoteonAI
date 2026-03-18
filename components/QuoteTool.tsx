@@ -871,7 +871,10 @@ export default function QuoteTool() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: body }),
       })
-      if (!processRes.ok) throw new Error(`Process API returned ${processRes.status}`)
+      if (!processRes.ok) {
+        const errBody = await processRes.json().catch(() => ({}))
+        throw new Error(errBody.error ?? `Process API returned ${processRes.status}`)
+      }
       const processData = await processRes.json()
 
       const convertRes = await fetch('/api/convert', {
@@ -880,7 +883,7 @@ export default function QuoteTool() {
         body: JSON.stringify({
           payload: processData,
           originalRequest: body,
-          threadId: processData.threadId,
+          threadId: processData.threadUuid,
         }),
       })
       if (!convertRes.ok) throw new Error(`Convert API returned ${convertRes.status}`)
