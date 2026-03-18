@@ -66,32 +66,53 @@ async function routeHybrid(
   options: RouterOptions
 ): Promise<ProcessorResult> {
   const startTime = Date.now()
-  const components: HybridComponent[] = []
-  const totalsByFlow: Partial<Record<LogisticsFlow, number>> = {}
+
+  // Run each flow and track results + totals together
+  const flowResults: Array<{ flow: LogisticsFlow; result: ProcessorResult; total: number }> = []
 
   for (const flow of flows) {
     const result = await routeSingleFlow(flow, preprocessResult, options)
-    let flowTotal = 0
+    let total = 0
 
     if (result.responseData.type === 'drayage') {
-      flowTotal = result.responseData.quote?.subtotal ?? 0
+      total = result.responseData.quote?.subtotal ?? 0
     } else if (result.responseData.type === 'warehousing') {
-      flowTotal = result.responseData.result.total
+      total = result.responseData.result.total
     } else if (result.responseData.type === 'last-mile') {
-      flowTotal = result.responseData.result.total
+      total = result.responseData.result.total
     }
 
-    components.push({
-      flow,
-      processorType: result.processorType,
-      responseData: result.responseData as HybridComponent['responseData'],
-      total: flowTotal,
-    })
-
-    totalsByFlow[flow] = flowTotal
+    flowResults.push({ flow, result, total })
   }
 
-  const combinedTotal = Object.values(totalsByFlow).reduce((sum, v) => sum + (v ?? 0), 0)
+  const nonZero = flowResults.filter(r => r.total > 0)
+
+  // If only one flow produced a real quote, return it directly (avoids $0.00 hybrid wrapper)
+  if (nonZero.length === 1) {
+    return nonZero[0].result
+  }
+
+  // If no flow produced anything, return the primary flow so the formatter can show
+  // a proper "missing fields" message instead of a $0.00 combined total
+  if (nonZero.length === 0) {
+    const primaryFlow = preprocessResult.classifiedIntent.primaryFlow ?? flows[0]
+    const primary = flowResults.find(r => r.flow === primaryFlow) ?? flowResults[0]
+    return primary.result
+  }
+
+  // Multiple flows with real data — build proper hybrid result
+  const components: HybridComponent[] = flowResults.map(r => ({
+    flow: r.flow,
+    processorType: r.result.processorType,
+    responseData: r.result.responseData as HybridComponent['responseData'],
+    total: r.total,
+  }))
+
+  const totalsByFlow: Partial<Record<LogisticsFlow, number>> = {}
+  for (const r of flowResults) {
+    totalsByFlow[r.flow] = r.total
+  }
+  const combinedTotal = nonZero.reduce((sum, r) => sum + r.total, 0)
 
   const hybridData: HybridResponseData = {
     type: 'hybrid',
