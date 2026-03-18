@@ -171,14 +171,14 @@ type ThreadDetail = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TABS: { id: TabMode; label: string; minRole?: string }[] = [
-  { id: 'inbox', label: 'Inbox' },
-  { id: 'ai-review', label: 'AI Quote' },
-  { id: 'quote-builder', label: 'Quote Builder' },
-  { id: 'search', label: 'Search' },
+  { id: 'inbox', label: 'Message Inbox' },
+  { id: 'ai-review', label: 'AI Quote Builder' },
+  { id: 'quote-builder', label: 'Quote Simulator' },
+  { id: 'search', label: 'Search Thread' },
   { id: 'pricing-logic', label: 'Rate Sheet' },
-  { id: 'pricing-history', label: 'History', minRole: 'manager' },
-  { id: 'customer', label: 'Settings', minRole: 'manager' },
-  { id: 'team', label: 'Team', minRole: 'admin' },
+  { id: 'pricing-history', label: 'Change History', minRole: 'manager' },
+  { id: 'customer', label: 'Business Settings', minRole: 'manager' },
+  { id: 'team', label: 'Organization', minRole: 'admin' },
 ]
 
 function roleLevel(role?: string): number {
@@ -485,7 +485,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 ${props.className ?? ''}`}
+      className={`w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 ${props.className ?? ''}`}
     />
   )
 }
@@ -521,7 +521,7 @@ function NumericInput({
       value={text}
       placeholder={placeholder ?? '0'}
       min={min}
-      className="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500"
+      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
       onChange={e => {
         const raw = e.target.value
         if (raw === '' || pattern.test(raw)) {
@@ -545,7 +545,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 ${props.className ?? ''}`}
+      className={`w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 ${props.className ?? ''}`}
     />
   )
 }
@@ -554,7 +554,7 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 resize-y ${props.className ?? ''}`}
+      className={`w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-y ${props.className ?? ''}`}
     />
   )
 }
@@ -577,10 +577,10 @@ function Btn({
   const base = 'rounded-lg font-medium transition-colors disabled:opacity-50'
   const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' }
   const variants = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'text-gray-600 hover:bg-gray-100',
+    primary: 'bg-blue-700 text-white hover:bg-blue-800 shadow-sm',
+    secondary: 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 shadow-sm',
+    danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
+    ghost: 'text-slate-700 border border-slate-200 hover:bg-slate-100',
   }
   return (
     <button
@@ -2355,8 +2355,58 @@ export default function QuoteTool() {
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     You have read-only access to the rate sheet. Contact a manager or admin to request changes.
                   </p>
+                ) : userRole === 'manager' ? (
+                  /* Manager: submit change request */
+                  <div className="space-y-3">
+                    <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                      Submit a change request below. An admin will review and approve it.
+                    </p>
+                    <div>
+                      <Label>Requested Value ({selectedRate.unit})</Label>
+                      <Input
+                        type="number"
+                        step={0.01}
+                        value={rcrRateKey === selectedRate.id ? rcrRequestedVal : selectedRate.currentValue}
+                        onChange={e => {
+                          setRcrRateKey(selectedRate.id)
+                          setRcrRateLabel(selectedRate.label)
+                          setRcrCurrentVal(selectedRate.currentValue)
+                          setRcrRequestedVal(parseFloat(e.target.value) || 0)
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label>Reason</Label>
+                      <Textarea rows={2} value={rcrReason} onChange={e => setRcrReason(e.target.value)} placeholder="Why do you need this change?" />
+                    </div>
+                    {rcrError && <p className="text-xs text-red-600">{rcrError}</p>}
+                    {rcrSuccess && <p className="text-xs text-green-600">{rcrSuccess}</p>}
+                    <Btn
+                      disabled={rcrSubmitting}
+                      onClick={async () => {
+                        setRcrSubmitting(true); setRcrError(''); setRcrSuccess('')
+                        try {
+                          const res = await fetch('/api/rate-requests', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              rate_key: selectedRate.id,
+                              rate_label: selectedRate.label,
+                              current_value: selectedRate.currentValue,
+                              requested_value: rcrRequestedVal,
+                              reason: rcrReason || undefined,
+                            }),
+                          })
+                          if (res.ok) { setRcrSuccess('Request submitted!'); setRcrReason('') }
+                          else { const d = await res.json(); setRcrError(d.error ?? 'Failed') }
+                        } finally { setRcrSubmitting(false) }
+                      }}
+                    >
+                      {rcrSubmitting ? 'Submitting…' : 'Submit Change Request'}
+                    </Btn>
+                  </div>
                 ) : (
-                  /* Manager / Admin: direct edit */
+                  /* Admin: direct edit */
                   <div className="space-y-3">
                     <div>
                       <Label>New Value ({selectedRate.unit})</Label>

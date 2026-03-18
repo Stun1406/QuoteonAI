@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm -v)",
-      "Bash(cat /c/LithiumQ/quoteon/quote-engine/migrations/*.sql)"
+      "Bash(cat /c/LithiumQ/quoteon/quote-engine/migrations/*.sql)",
+      "Bash(node -e \"const p = require\\(''./node_modules/next/package.json''\\); console.log\\(p.version\\)\")"
     ]
   }
 }

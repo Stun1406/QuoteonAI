@@ -27,6 +27,12 @@ export function comparePricingLogicCatalogItems(a: PricingLogicRate, b: PricingL
   const aOrd = ai === -1 ? 99 : ai
   const bOrd = bi === -1 ? 99 : bi
   if (aOrd !== bOrd) return aOrd - bOrd
+  // Within Drayage: city base rates come last
+  if (a.category === 'Drayage' && b.category === 'Drayage') {
+    const aIsCity = a.id.startsWith('drayage.city.')
+    const bIsCity = b.id.startsWith('drayage.city.')
+    if (aIsCity !== bIsCity) return aIsCity ? 1 : -1
+  }
   return a.id.localeCompare(b.id)
 }
 
