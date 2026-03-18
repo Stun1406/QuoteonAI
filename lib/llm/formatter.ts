@@ -221,22 +221,35 @@ async function formatHybridResult(
   for (const component of data.components) {
     if (component.responseData.type === 'drayage') {
       const drayageData = component.responseData as DrayageResponseData
-      if (drayageData.quote) {
+      if (drayageData.quote && drayageData.quote.subtotal > 0) {
         sections.push(`DRAYAGE QUOTE — ${drayageData.quote.city.toUpperCase()}
 ${'─'.repeat(40)}
 ${drayageData.quote.lineItems.map((item: LineItem) => `${item.code.padEnd(8)} ${item.description.padEnd(30)} ${formatCurrency(item.amount).padStart(10)}`).join('\n')}
 ${'─'.repeat(40)}
 Drayage Total: ${formatCurrency(drayageData.quote.subtotal)}
 `)
+      } else if (drayageData.missingFields?.length) {
+        sections.push(`DRAYAGE — Additional info needed: ${drayageData.missingFields.join(', ')}\n`)
       }
     } else if (component.responseData.type === 'warehousing') {
       const whData = component.responseData as WarehousingResponseData
-      sections.push(`WAREHOUSING/TRANSLOADING QUOTE
+      if (whData.result.total > 0) {
+        sections.push(`WAREHOUSING/TRANSLOADING QUOTE
 ${'─'.repeat(40)}
 ${whData.result.lineItems.map(item => `${item.description.padEnd(35)} ${formatCurrency(item.total).padStart(10)}`).join('\n')}
 ${'─'.repeat(40)}
 Warehousing Total: ${formatCurrency(whData.result.total)}
 `)
+      }
+    }
+  }
+
+  // If only one component has a real total, skip the redundant combined line
+  const nonZeroComponents = data.components.filter(c => c.total > 0)
+  if (nonZeroComponents.length === 1) {
+    const single = nonZeroComponents[0]
+    if (single.responseData.type === 'drayage') {
+      return formatDrayageResult(single.responseData as DrayageResponseData, contactInfo, originalMessage)
     }
   }
 

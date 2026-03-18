@@ -23,7 +23,11 @@ Company info:
 Customer: ${contactInfo.name || 'Team'} ${contactInfo.company ? `from ${contactInfo.company}` : ''}
 Their message: ${originalMessage.slice(0, 800)}
 
-Write a helpful, professional response. Be concise. Sign off as:
+Write a helpful, professional response. Be concise.
+
+IMPORTANT: Do NOT generate any pricing estimates, dollar amounts, or quote figures. If the customer is asking for a quote, acknowledge their request and let them know the team will follow up with an accurate quote shortly.
+
+Sign off as:
 Jacob Hernandez
 Operations Lead | FL Distributions
 (424) 555-0187

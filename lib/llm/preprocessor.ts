@@ -15,13 +15,20 @@ Return ONLY valid JSON. No markdown. No explanation. No preamble.
 - Detect forwarding by: 'Forwarded message', 'Begin forwarded message', embedded From:/To:/Date: headers
 
 ## Intent Classification
-- drayage: port container moves from LA/Long Beach ports, chassis, pier pass, lane mentions, inland delivery city
-- transloading: container unloading, palletizing, shrink wrap, BOL, loose cartons
+- drayage: port container moves from LA/Long Beach ports, chassis, pier pass, lane mentions, inland delivery city, live unload (driver waits at delivery), waiting time, overweight surcharge, drop fee, extra stops at delivery
+- transloading: unloading containers INTO a warehouse, palletizing, shrink wrap, BOL creation, loose cartons, repackaging goods inside a facility
 - warehousing: storage, monthly pallet storage, handling in/out, after-hours access
 - last-mile: final delivery, straight truck, box truck, mileage, stops, liftgate
 - general-inquiry: questions about company, services, hours, location
 - complaint: customer complaints or issues
 - other: doesn't fit any category
+
+## CRITICAL classification rules
+- "Live unload" or "live unload hours" = drayage only (driver waits while container is unloaded at destination). Do NOT classify as transloading.
+- "Waiting time" or "detention" = drayage only. Do NOT classify as transloading.
+- "Chassis days" = drayage only.
+- Only classify as transloading if the email explicitly mentions palletizing, shrink wrap, BOL, or warehouse unloading/sorting.
+- A single email asking for a port-to-destination container move with accessorials (chassis, waiting, live unload, pier pass) = drayage only, not hybrid.
 
 ## Response Format
 {

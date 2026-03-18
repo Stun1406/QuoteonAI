@@ -22,7 +22,13 @@ export async function routeMessage(
   const uniqueFlows = [...new Set(flows)] as LogisticsFlow[]
 
   // No logistics flows — general inquiry
-  if (uniqueFlows.length === 0 || preprocessResult.classifiedIntent.overall !== 'quote') {
+  // But if logistics flows were detected, route them even if overall isn't 'quote'
+  // to avoid the LLM general formatter generating fake placeholder prices
+  if (uniqueFlows.length === 0) {
+    return processGeneralInquiry(preprocessResult, options)
+  }
+
+  if (preprocessResult.classifiedIntent.overall !== 'quote' && preprocessResult.intent === 'other') {
     return processGeneralInquiry(preprocessResult, options)
   }
 
