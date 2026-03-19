@@ -35,10 +35,12 @@ ${result.warnings.length > 0 ? `Notes: ${result.warnings.join('; ')}` : ''}
 
 Write a professional, concise quote email. Include:
 1. Brief greeting using the customer's first name (or "Team" if unknown)
-2. The quote details formatted clearly
-3. The signature: Jacob Hernandez, Operations Lead, FL Distributions, (424) 555-0187
+2. The quote line items as a markdown table with exactly these columns: | Description | Amount |
+3. A separator row after the header: |---|---|
+4. A bold TOTAL row at the bottom: | **TOTAL** | **$X.XX** |
+5. The signature: Jacob Hernandez, Operations Lead, FL Distributions, (424) 555-0187
 
-Keep it professional and data-focused. Plain text only, no HTML.`
+Use markdown table format (pipe-separated). Do not use HTML. Keep it professional and data-focused.`
 
   const response = await openai.chat.completions.create({
     model: MODEL,

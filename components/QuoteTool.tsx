@@ -348,17 +348,50 @@ async function copyText(text: string): Promise<void> {
 }
 
 function simpleMarkdownToHtml(md: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;max-width:600px;margin:0 auto;padding:20px;color:#111827;">${md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^─+$/gm, '<hr style="border:none;border-top:1px solid #E5E7EB;margin:6px 0;">')
-    .replace(/^═+$/gm, '<hr style="border:none;border-top:2px solid #374151;margin:6px 0;">')
-    .split('\n')
-    .map(l => l === '' ? '<br>' : `<p style="margin:3px 0;">${l}</p>`)
-    .join('\n')
-  }</body></html>`
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const inlineFormat = (s: string) => escape(s).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+
+  // Group lines into table blocks and regular lines
+  const lines = md.split('\n')
+  const htmlParts: string[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    // Detect markdown table (starts and ends with |, or is a separator |---|)
+    if (/^\|.*\|$/.test(line.trim())) {
+      const tableLines: string[] = []
+      while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) {
+        tableLines.push(lines[i])
+        i++
+      }
+      // First row = header, second row = separator (skip), rest = body
+      const [header, , ...body] = tableLines
+      const thCells = header.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+        .map(c => `<th style="padding:8px 14px;text-align:left;background:#F1F5F9;border-bottom:2px solid #CBD5E1;">${inlineFormat(c.trim())}</th>`).join('')
+      const bodyRows = body.map(row => {
+        const cells = row.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+          .map(c => `<td style="padding:7px 14px;border-bottom:1px solid #E2E8F0;">${inlineFormat(c.trim())}</td>`).join('')
+        return `<tr>${cells}</tr>`
+      }).join('')
+      htmlParts.push(`<table style="width:100%;border-collapse:collapse;margin:12px 0;font-family:Arial,sans-serif;font-size:13px;"><thead><tr>${thCells}</tr></thead><tbody>${bodyRows}</tbody></table>`)
+      continue
+    }
+
+    // Regular line
+    if (line === '') {
+      htmlParts.push('<br>')
+    } else if (/^─+$/.test(line)) {
+      htmlParts.push('<hr style="border:none;border-top:1px solid #E5E7EB;margin:6px 0;">')
+    } else if (/^═+$/.test(line)) {
+      htmlParts.push('<hr style="border:none;border-top:2px solid #374151;margin:6px 0;">')
+    } else {
+      htmlParts.push(`<p style="margin:3px 0;font-family:Arial,sans-serif;font-size:13px;">${inlineFormat(line)}</p>`)
+    }
+    i++
+  }
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#111827;">${htmlParts.join('\n')}</body></html>`
 }
 
 function statusBadgeClass(status: 'new' | 'in-progress' | 'responded') {

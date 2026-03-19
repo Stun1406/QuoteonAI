@@ -88,33 +88,26 @@ Operations Lead | FL Distributions
 
   const subject = `Drayage Quote – ${quote.city.toUpperCase()} – ${quote.containerSize} ft Container`
 
-  const lineItemsText = quote.lineItems.map(item =>
-    `${item.code.padEnd(8)} ${item.description.padEnd(35)} ${formatCurrency(item.amount).padStart(10)}`
-  ).join('\n')
-
   const basisText = quote.basisNotes.length > 0 ? quote.basisNotes.join('\n') : 'Base rate includes standard port pickup from LA/LB terminals.'
   const notesText = [...(data.notes ?? []), ...quote.warnings].filter(Boolean)
+
+  const tableRows = quote.lineItems.map(item =>
+    `| ${item.description.padEnd(42)} | ${formatCurrency(item.amount).padStart(10)} |`
+  ).join('\n')
 
   const body = `Hi ${name},
 
 Thank you for reaching out!${isRush ? ' We understand this is urgent and have prioritized your quote.' : ''} Please find your drayage quote below.
 
-QUOTE DETAILS
-─────────────
-Destination:  ${quote.city}
-Container:    ${quote.containerSize} ft
-Weight:       ${quote.containerWeightLbs ? quote.containerWeightLbs.toLocaleString() + ' lbs' : 'Not specified'}
+**Destination:** ${quote.city}  |  **Container:** ${quote.containerSize} ft  |  **Weight:** ${quote.containerWeightLbs ? quote.containerWeightLbs.toLocaleString() + ' lbs' : 'Not specified'}
 
-LINE ITEMS
-──────────
-${lineItemsText}
-─────────────────────────────────────────────────────
-SUBTOTAL${formatCurrency(quote.subtotal).padStart(49)}
+| Description                                        | Amount     |
+|--------------------------------------------|------------|
+${tableRows}
+| **TOTAL**                                          | **${formatCurrency(quote.subtotal)}** |
 
-BASIS
-─────
-${basisText}
-${notesText.length > 0 ? '\nNOTES\n─────\n' + notesText.join('\n') : ''}
+**Basis:** ${basisText}
+${notesText.length > 0 ? '\n**Notes:** ' + notesText.join(' | ') : ''}
 
 Best Regards,
 Jacob Hernandez
@@ -160,19 +153,18 @@ function formatLastMileResult(
   const name = sanitizeName(contactInfo.name)
   const subject = 'Last-Mile Delivery Quote – FL Distribution'
 
-  const lineItemsText = data.result.lineItems.map(item =>
-    `${item.description.padEnd(40)} ${formatCurrency(item.amount).padStart(10)}`
+  const tableRows = data.result.lineItems.map(item =>
+    `| ${item.description.padEnd(42)} | ${formatCurrency(item.amount).padStart(10)} |`
   ).join('\n')
 
   const body = `Hi ${name},
 
 Thank you for reaching out to FL Distribution! Please find your last-mile delivery quote below.
 
-LINE ITEMS
-──────────
-${lineItemsText}
-──────────────────────────────────────────────────────
-TOTAL${formatCurrency(data.result.total).padStart(51)}
+| Description                                        | Amount     |
+|--------------------------------------------|------------|
+${tableRows}
+| **TOTAL**                                          | **${formatCurrency(data.result.total)}** |
 
 Best Regards,
 Jacob Hernandez
