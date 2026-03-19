@@ -150,6 +150,18 @@ export async function preprocessMessage(
     }
   }
 
+  // Deterministic keyword fallback — if LLM missed drayage signals, force it
+  const msgLower = text.toLowerCase()
+  const drayageKeywords = ['chassis', 'pier pass', 'pierpass', 'tcf', 'terminal clean', 'live unload',
+    'waiting time', 'detention', 'port of la', 'port of long beach', 'polb', 'pola', 'container move',
+    'drayage', 'drop fee', 'drop and pick', 'overweight surcharge']
+  const hasDrayageSignal = drayageKeywords.some(kw => msgLower.includes(kw))
+  if (hasDrayageSignal && !classifiedIntent.flows.includes('drayage')) {
+    classifiedIntent.flows = ['drayage', ...classifiedIntent.flows.filter(f => f !== 'drayage')]
+    classifiedIntent.primaryFlow = 'drayage'
+    classifiedIntent.overall = 'quote'
+  }
+
   return {
     contactInfo,
     intent,
