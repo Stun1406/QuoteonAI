@@ -130,7 +130,7 @@ export function lookupCity(city: string): DrayageCityRate | null {
 export function calculateDrayageQuote(extraction: DrayageExtraction): DrayageQuoteResult {
   const { city, containerSize, containerWeightLbs, chassisDays, chassisDaysWccp,
     waitingHours, liveUnloadHours, prepaidPierPass, tcfCharge,
-    extraStops } = extraction
+    extraStops, rushRequest, chassisSplitRequired } = extraction
 
   if (!city) {
     return {
@@ -170,9 +170,21 @@ export function calculateDrayageQuote(extraction: DrayageExtraction): DrayageQuo
     }
   }
 
-  // Weight surcharge
+  // Weight surcharge — tiered lookup
   if (containerWeightLbs && containerWeightLbs > 44000) {
-    lineItems.push({ code: 'WTSUR', description: 'Overweight Surcharge', amount: 200 })
+    const tier = DRAYAGE_WEIGHT_SURCHARGES.find(t => containerWeightLbs >= t.minLbs && containerWeightLbs <= t.maxLbs)
+    const surcharge = tier?.surcharge ?? DRAYAGE_WEIGHT_SURCHARGES[DRAYAGE_WEIGHT_SURCHARGES.length - 1].surcharge
+    lineItems.push({ code: 'WTSUR', description: `Overweight Surcharge (${containerWeightLbs.toLocaleString()} lbs)`, amount: surcharge })
+  }
+
+  // Rush request
+  if (rushRequest) {
+    lineItems.push({ code: 'RUSH', description: 'Rush Request', amount: 150 })
+  }
+
+  // Chassis split
+  if (chassisSplitRequired) {
+    lineItems.push({ code: 'CSPLIT', description: 'Chassis Split', amount: 75 })
   }
 
   // Pier pass

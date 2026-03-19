@@ -106,7 +106,7 @@ export function calculateWarehouseQuote(
     const days = extraction.storage.storageDurationDays || 30
     const isOversize = extraction.storage.palletSize === 'oversize'
     const monthlyRate = isOversize ? STORAGE_RATES.oversizePalletPerMonth : STORAGE_RATES.normalPalletPerMonth
-    const storageAmount = (days / 30) * monthlyRate * pallets
+    const storageAmount = +((days / 30) * monthlyRate * pallets).toFixed(2)
 
     lineItems.push({
       description: `Storage — ${pallets} pallets × ${days} days`,

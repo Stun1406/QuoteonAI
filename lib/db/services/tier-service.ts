@@ -43,10 +43,10 @@ function calculateTier(totalSpend: number): CustomerTier {
 
 export function getDiscountPct(tier: CustomerTier): number {
   switch (tier) {
-    case 'platinum': return 0.08
-    case 'gold': return 0.06
-    case 'silver': return 0.04
-    case 'bronze': return 0.02
+    case 'platinum': return 8
+    case 'gold': return 6
+    case 'silver': return 4
+    case 'bronze': return 2
     default: return 0
   }
 }

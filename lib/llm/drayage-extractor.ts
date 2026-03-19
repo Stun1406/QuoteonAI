@@ -66,19 +66,24 @@ export async function extractDrayageParameters(
     parsed = {}
   }
 
+  const toNum = (v: unknown): number | null => {
+    const n = Number(v)
+    return v != null && !isNaN(n) ? n : null
+  }
+
   return {
-    city: parsed.city ?? null,
+    city: typeof parsed.city === 'string' ? parsed.city : null,
     containerSize: parsed.containerSize ?? null,
-    containerWeightLbs: parsed.containerWeightLbs ?? null,
-    chassisDays: parsed.chassisDays ?? null,
-    chassisDaysWccp: parsed.chassisDaysWccp ?? null,
-    waitingHours: parsed.waitingHours ?? null,
-    liveUnloadHours: parsed.liveUnloadHours ?? null,
-    rushRequest: parsed.rushRequest ?? false,
-    prepaidPierPass: parsed.prepaidPierPass ?? true,
-    tcfCharge: parsed.tcfCharge ?? true,
-    chassisSplitRequired: parsed.chassisSplitRequired ?? false,
-    extraStops: parsed.extraStops ?? 0,
-    notes: parsed.notes ?? [],
+    containerWeightLbs: toNum(parsed.containerWeightLbs),
+    chassisDays: toNum(parsed.chassisDays),
+    chassisDaysWccp: toNum(parsed.chassisDaysWccp),
+    waitingHours: toNum(parsed.waitingHours),
+    liveUnloadHours: toNum(parsed.liveUnloadHours),
+    rushRequest: Boolean(parsed.rushRequest ?? false),
+    prepaidPierPass: parsed.prepaidPierPass !== false,
+    tcfCharge: parsed.tcfCharge !== false,
+    chassisSplitRequired: Boolean(parsed.chassisSplitRequired ?? false),
+    extraStops: toNum(parsed.extraStops) ?? 0,
+    notes: Array.isArray(parsed.notes) ? parsed.notes : [],
   }
 }
