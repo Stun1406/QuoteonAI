@@ -1561,7 +1561,7 @@ export default function QuoteTool() {
               <div className="flex items-center gap-3 flex-wrap">
                 <Btn
                   onClick={() => confirmAndSend(item, draft)}
-                  disabled={!item.emailId || sendingReply === item.id}
+                  disabled={sendingReply === item.id}
                 >
                   {sendingReply === item.id
                     ? 'Sending…'
