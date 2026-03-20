@@ -18,18 +18,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Verify HMAC signature
+    // Verify auth: accept either API key or HMAC signature
+    const apiKey = req.headers.get('x-api-key') ?? ''
+    const expectedApiKey = process.env.EMAIL_WORKER_API_KEY ?? ''
     const signature = req.headers.get('x-webhook-signature') ?? ''
     const secret = process.env.WEBHOOK_SECRET ?? ''
 
-    if (secret && !verifyWebhookSignature(formFields, signature, secret)) {
-      await logEmailFailure({
-        stage: 'webhook-auth',
-        statusCode: 401,
-        message: 'Invalid webhook signature',
-        context: { signature },
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const apiKeyValid = expectedApiKey && apiKey === expectedApiKey
+    const hmacValid = secret && verifyWebhookSignature(formFields, signature, secret)
+
+    if (expectedApiKey || secret) {
+      if (!apiKeyValid && !hmacValid) {
+        await logEmailFailure({
+          stage: 'webhook-auth',
+          statusCode: 401,
+          message: 'Invalid API key or webhook signature',
+          context: { apiKey: apiKey ? '[present]' : '[missing]', signature: signature ? '[present]' : '[missing]' },
+        })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
     }
 
     // Extract fields

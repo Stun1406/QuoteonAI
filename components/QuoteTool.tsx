@@ -1485,10 +1485,10 @@ export default function QuoteTool() {
                               <CopyBtn getText={() => resp.body} />
                             </div>
                           </div>
-                          {resp.format === 'html' ? (
+                          {resp.format === 'html' || resp.role === 'ai' ? (
                             <div
                               className="text-sm"
-                              dangerouslySetInnerHTML={{ __html: resp.body }}
+                              dangerouslySetInnerHTML={{ __html: resp.format === 'html' ? resp.body : simpleMarkdownToHtml(resp.body) }}
                             />
                           ) : (
                             <div className="text-sm text-[var(--color-text-1)] whitespace-pre-wrap">
