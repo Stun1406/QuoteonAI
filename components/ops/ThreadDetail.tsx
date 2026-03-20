@@ -21,6 +21,39 @@ function getInitials(name: string | null) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }
 
+function markdownToHtml(md: string): string {
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const inline = (s: string) => escape(s).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  const lines = md.split('\n')
+  const parts: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (/^\|.*\|$/.test(line.trim())) {
+      const tableLines: string[] = []
+      while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) {
+        tableLines.push(lines[i])
+        i++
+      }
+      const [header, , ...body] = tableLines
+      const ths = header.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+        .map(c => `<th style="padding:6px 10px;text-align:left;background:#F8FAFC;border-bottom:2px solid #CBD5E1;font-size:11px;">${inline(c.trim())}</th>`).join('')
+      const rows = body.map(row => {
+        const tds = row.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+          .map(c => `<td style="padding:5px 10px;border-bottom:1px solid #E2E8F0;font-size:11px;">${inline(c.trim())}</td>`).join('')
+        return `<tr>${tds}</tr>`
+      }).join('')
+      parts.push(`<table style="width:100%;border-collapse:collapse;margin:8px 0;"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`)
+      continue
+    }
+    if (line === '') { parts.push('<br>') }
+    else if (/^─+$/.test(line) || /^═+$/.test(line)) { parts.push('<hr style="border:none;border-top:1px solid #E5E7EB;margin:4px 0;">') }
+    else { parts.push(`<p style="margin:2px 0;font-size:12px;color:#374151;">${inline(line)}</p>`) }
+    i++
+  }
+  return parts.join('\n')
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -145,7 +178,10 @@ function ArtifactContent({ artifact }: { artifact: { artifact_type: string; arti
       const content = (data as { content?: string }).content ?? ''
       return (
         <div>
-          <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded whitespace-pre-wrap font-mono overflow-auto max-h-80">{content}</pre>
+          <div
+            className="text-xs text-gray-700 bg-gray-50 p-3 rounded overflow-auto max-h-80"
+            dangerouslySetInnerHTML={{ __html: markdownToHtml(content) }}
+          />
           <div className="mt-2 flex gap-2">
             <CopyButton text={content} />
             <button onClick={() => setShowRaw(true)} className="text-[11px] text-gray-400 hover:text-gray-600">View JSON</button>
