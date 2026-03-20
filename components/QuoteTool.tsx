@@ -796,12 +796,15 @@ export default function QuoteTool() {
       const raw = localStorage.getItem('fld_mock_inbox')
       const mocks: MockEmail[] = raw ? JSON.parse(raw) : SAMPLE_EMAILS
       if (!raw) localStorage.setItem('fld_mock_inbox', JSON.stringify(SAMPLE_EMAILS))
-      setEmails(mocks.map(e => ({ ...e, source: 'mock' as const })))
+      setEmails(mocks.map(e => ({ ...e, source: 'mock' as const })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
     } catch {
       setEmails(SAMPLE_EMAILS.map(e => ({ ...e, source: 'mock' as const })))
     }
     // Real emails from the API (overlaid on top of mocks)
     loadRealEmails()
+
+    // Poll for new real emails every 30 seconds
+    const pollInterval = setInterval(() => loadRealEmails(), 30_000)
 
     // Pricing rates
     try {
@@ -831,6 +834,8 @@ export default function QuoteTool() {
     } catch {
       // ignore
     }
+
+    return () => clearInterval(pollInterval)
   }, [])
 
   const persistEmails = useCallback((updated: MockEmail[]) => {
@@ -849,7 +854,7 @@ export default function QuoteTool() {
         const mockEmails = prev.filter(e => !e.source || e.source === 'mock')
         const realIds = new Set(realEmails.map(e => e.id))
         const dedupedMocks = mockEmails.filter(e => !realIds.has(e.id))
-        return [...realEmails, ...dedupedMocks]
+        return [...realEmails, ...dedupedMocks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       })
     } catch {
       // API unavailable — keep showing mock emails only
@@ -1370,6 +1375,7 @@ export default function QuoteTool() {
               {checkedEmails.size > 0 && (
                 <Btn size="sm" variant="danger" onClick={deleteSelected}>Delete Selected</Btn>
               )}
+              <Btn size="sm" variant="ghost" onClick={() => loadRealEmails()}>↻ Refresh</Btn>
               <Btn size="sm" variant="ghost" onClick={deleteAll}>Delete All</Btn>
             </div>
 
