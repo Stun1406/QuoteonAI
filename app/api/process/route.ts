@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTenantProjectContext } from '@/lib/db/context'
-import { preprocessMessage } from '@/lib/llm/preprocessor'
+import { unifiedExtract } from '@/lib/llm/unified-extractor'
 import { resolveOrCreateCompanyContact } from '@/lib/db/services/company-contact-service'
 import { addArtifactToThread, updateThreadContactCompany, updateThreadProcessorType, updateThreadProcessingTime, getMessageThreadByThreadId } from '@/lib/db/services/thread-service'
 import { updateThreadIntent, createMessageThread, generateThreadId } from '@/lib/db/tables/thread'
@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
       threadUuid = thread.id
     }
 
-    // Preprocess with real thread UUID so llm_calls FK is satisfied
-    const preprocessResult = await preprocessMessage(messageWithContext, {
+    // Unified extraction: classify intent + extract all params in one LLM call
+    const preprocessResult = await unifiedExtract(messageWithContext, {
       tenantId,
       projectId,
       threadId: threadUuid,
@@ -130,6 +130,9 @@ export async function POST(req: NextRequest) {
       priorProcessorResult,
       rawMessage: text,
       discountPct: tierInfo.discountPct,
+      drayageParams: preprocessResult.drayageParams,
+      warehouseParams: preprocessResult.warehouseParams,
+      lastMileParams: preprocessResult.lastMileParams,
     })
 
     // Attach tier info

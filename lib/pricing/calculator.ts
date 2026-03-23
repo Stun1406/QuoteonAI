@@ -8,113 +8,117 @@ export function calculateWarehouseQuote(
   const lineItems: QuoteLineItem[] = []
   const warnings: string[] = []
 
-  // Transloading
+  // ── Transloading ──────────────────────────────────────────────────────────
   if (extraction.transloading.enabled && extraction.transloading.containers.length > 0) {
     for (const container of extraction.transloading.containers) {
-      const containerLabel = container.containerSize ?? 'container'
+      const containerLabel = container.containerSize ?? '40ft'
       const count = container.containerCount || 1
 
       if (container.cargoPackaging === 'loose-cargo') {
-        const cartons = container.looseCargoCount || 0
-        if (cartons > 0) {
-          let cartonCost = 0
-          if (cartons <= 50) {
-            cartonCost = cartons * TRANSLOADING_RATES.looseCargo.tier1.rate
-          } else if (cartons <= 200) {
-            cartonCost = 50 * TRANSLOADING_RATES.looseCargo.tier1.rate +
-              (cartons - 50) * TRANSLOADING_RATES.looseCargo.tier2.rate
-          } else {
-            cartonCost = 50 * TRANSLOADING_RATES.looseCargo.tier1.rate +
-              150 * TRANSLOADING_RATES.looseCargo.tier2.rate +
-              (cartons - 200) * TRANSLOADING_RATES.looseCargo.tier3.rate
-          }
-          lineItems.push({
-            description: `Loose Cargo Handling — ${cartons} cartons (${containerLabel})`,
-            quantity: count,
-            unitPrice: cartonCost,
-            total: count * cartonCost,
-          })
-        }
-      } else {
-        // Pallet-based
-        const defaultPallets = TRANSLOADING_RATES.defaultPalletsPerContainer[containerLabel] ?? 20
-        const pallets = container.palletCount || defaultPallets
-        const isOversize = extraction.storage.palletSize === 'oversize'
+        const pieces = container.looseCargoCount || 0
+        let containerRate: number
 
-        let palletCost: number
-        if (isOversize) {
-          palletCost = pallets * TRANSLOADING_RATES.oversizePallet
+        if (pieces <= 500) {
+          containerRate = TRANSLOADING_RATES.looseCargo.tier1.rate
+        } else if (pieces <= 1000) {
+          containerRate = TRANSLOADING_RATES.looseCargo.tier2.rate
+        } else if (pieces <= 1500) {
+          containerRate = TRANSLOADING_RATES.looseCargo.tier3.rate
         } else {
-          if (pallets <= 20) {
-            palletCost = pallets * TRANSLOADING_RATES.normalPalletFirst20
-          } else {
-            palletCost = 20 * TRANSLOADING_RATES.normalPalletFirst20 +
-              (pallets - 20) * TRANSLOADING_RATES.normalPalletAfter20
-          }
+          containerRate = +(pieces * TRANSLOADING_RATES.looseCargo.tier4.ratePerPc).toFixed(2)
         }
 
         lineItems.push({
-          description: `Transloading — ${pallets} pallets (${containerLabel})`,
+          description: `Transloading — Loose Cargo ${pieces > 0 ? pieces + ' pcs' : ''} (${containerLabel})`,
           quantity: count,
-          unitPrice: palletCost,
-          total: count * palletCost,
-          note: isOversize ? 'Oversize pallet rate' : undefined,
+          unitPrice: containerRate,
+          total: count * containerRate,
+        })
+      } else {
+        // Palletized — flat rate by container size
+        const rate = TRANSLOADING_RATES.palletized[containerLabel]
+          ?? TRANSLOADING_RATES.palletized['40ft']
+
+        const pallets = container.palletCount || TRANSLOADING_RATES.defaultPalletsPerContainer[containerLabel] || 20
+
+        lineItems.push({
+          description: `Transloading — Palletized ${pallets} pallets (${containerLabel})`,
+          quantity: count,
+          unitPrice: rate,
+          total: count * rate,
         })
       }
     }
 
-    // Shrink wrap
+    // Palletize + Shrink wrap ($15/pallet)
     if (extraction.transloading.shrinkWrap) {
-      const swPallets = extraction.transloading.shrinkWrapPalletCount ||
-        extraction.transloading.containers.reduce((sum, c) => sum + (c.palletCount || 0), 0)
+      const swPallets = extraction.transloading.shrinkWrapPalletCount
+        || extraction.transloading.containers.reduce((sum, c) => sum + (c.palletCount || 0), 0)
       if (swPallets > 0) {
         lineItems.push({
-          description: 'Shrink Wrap',
+          description: 'Palletize + Shrink Wrap',
           quantity: swPallets,
-          unitPrice: TRANSLOADING_RATES.shrinkWrapPerPallet,
-          total: swPallets * TRANSLOADING_RATES.shrinkWrapPerPallet,
+          unitPrice: TRANSLOADING_RATES.palletizeShrinkWrap,
+          total: swPallets * TRANSLOADING_RATES.palletizeShrinkWrap,
         })
       }
     }
 
-    // BOL
+    // BOL ($5/BOL)
     if (extraction.transloading.billOfLading) {
       const bolCount = extraction.transloading.containers.length || 1
       lineItems.push({
         description: 'Bill of Lading',
         quantity: bolCount,
-        unitPrice: TRANSLOADING_RATES.bolPerBol,
-        total: bolCount * TRANSLOADING_RATES.bolPerBol,
+        unitPrice: TRANSLOADING_RATES.billOfLading,
+        total: bolCount * TRANSLOADING_RATES.billOfLading,
       })
     }
 
-    // Seal
+    // Seal ($5/seal)
     if (extraction.transloading.seal) {
       const sealCount = extraction.transloading.containers.length || 1
       lineItems.push({
         description: 'Seal',
         quantity: sealCount,
-        unitPrice: TRANSLOADING_RATES.sealPerSeal,
-        total: sealCount * TRANSLOADING_RATES.sealPerSeal,
+        unitPrice: TRANSLOADING_RATES.seal,
+        total: sealCount * TRANSLOADING_RATES.seal,
       })
     }
   }
 
-  // Storage
+  // ── Storage / Warehousing ─────────────────────────────────────────────────
   if (extraction.storage.enabled && extraction.storage.palletCount > 0) {
     const pallets = extraction.storage.palletCount
     const days = extraction.storage.storageDurationDays || 30
     const isOversize = extraction.storage.palletSize === 'oversize'
-    const monthlyRate = isOversize ? STORAGE_RATES.oversizePalletPerMonth : STORAGE_RATES.normalPalletPerMonth
-    const storageAmount = +((days / 30) * monthlyRate * pallets).toFixed(2)
 
+    // Handling in + out
     lineItems.push({
-      description: `Storage — ${pallets} pallets × ${days} days`,
-      quantity: 1,
-      unitPrice: storageAmount,
-      total: storageAmount,
-      note: isOversize ? 'Oversize pallet rate ($25/pallet/month)' : '$18/pallet/month',
+      description: `Handling In & Out — ${pallets} pallets`,
+      quantity: pallets,
+      unitPrice: STORAGE_RATES.handlingInOutPerPallet,
+      total: pallets * STORAGE_RATES.handlingInOutPerPallet,
     })
+
+    // Storage: first 48 hrs free, then weekly for days 3-7, then monthly
+    if (days > 2) {
+      const monthlyRate = isOversize
+        ? STORAGE_RATES.oversizePalletPerMonth
+        : STORAGE_RATES.normalPalletPerMonth
+
+      const storageAmount = +((days / 30) * monthlyRate * pallets).toFixed(2)
+
+      lineItems.push({
+        description: `Storage — ${pallets} pallets × ${days} days`,
+        quantity: 1,
+        unitPrice: storageAmount,
+        total: storageAmount,
+        note: isOversize
+          ? `Oversize pallet rate ($${STORAGE_RATES.oversizePalletPerMonth}/pallet/month)`
+          : `$${STORAGE_RATES.normalPalletPerMonth}/pallet/month (first 48 hrs free)`,
+      })
+    }
 
     if (extraction.storage.monFriAfterHours) {
       lineItems.push({
@@ -127,7 +131,7 @@ export function calculateWarehouseQuote(
 
     if (extraction.storage.satSun) {
       lineItems.push({
-        description: 'Weekend Access (Sat–Sun)',
+        description: 'Weekend Open Fee (Sat–Sun)',
         quantity: 1,
         unitPrice: STORAGE_RATES.weekendSatSun,
         total: STORAGE_RATES.weekendSatSun,

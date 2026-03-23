@@ -10,36 +10,24 @@ interface DrayageProcessorOptions {
   threadId: string
   priorProcessorResult?: ProcessorResult | null
   rawMessage: string
+  preExtracted?: DrayageExtraction | null
 }
 
 function detectRemovalPhrases(text: string, prior: DrayageExtraction): Partial<DrayageExtraction> {
   const overrides: Partial<DrayageExtraction> = {}
   const lower = text.toLowerCase()
-
   if (/remove chassis|no chassis|without chassis/i.test(lower)) {
     overrides.chassisDays = null
     overrides.chassisDaysWccp = null
   }
-  if (/remove extra stops?|no extra stops?/i.test(lower)) {
-    overrides.extraStops = 0
-  }
-  if (/remove waiting|no waiting/i.test(lower)) {
-    overrides.waitingHours = null
-  }
-  if (/remove live unload|no live unload/i.test(lower)) {
-    overrides.liveUnloadHours = null
-  }
-
+  if (/remove extra stops?|no extra stops?/i.test(lower)) overrides.extraStops = 0
+  if (/remove waiting|no waiting/i.test(lower)) overrides.waitingHours = null
+  if (/remove live unload|no live unload/i.test(lower)) overrides.liveUnloadHours = null
   return overrides
 }
 
-function mergeExtractions(
-  current: DrayageExtraction,
-  prior: DrayageExtraction,
-  rawMessage: string
-): DrayageExtraction {
+function mergeExtractions(current: DrayageExtraction, prior: DrayageExtraction, rawMessage: string): DrayageExtraction {
   const removals = detectRemovalPhrases(rawMessage, prior)
-
   return {
     city: current.city ?? prior.city,
     containerSize: current.containerSize ?? prior.containerSize,
@@ -62,12 +50,11 @@ export async function processDrayage(
   options: DrayageProcessorOptions
 ): Promise<ProcessorResult> {
   const startTime = Date.now()
-  const { tenantId, projectId, threadId, priorProcessorResult, rawMessage } = options
+  const { tenantId, projectId, threadId, priorProcessorResult, rawMessage, preExtracted } = options
 
-  // Extract drayage parameters via LLM
-  const extraction = await extractDrayageParameters(rawMessage, { tenantId, projectId, threadId })
+  // Use pre-extracted params if provided, otherwise call LLM
+  const extraction = preExtracted ?? await extractDrayageParameters(rawMessage, { tenantId, projectId, threadId })
 
-  // Merge with prior extraction if multi-turn
   let finalExtraction = extraction
   if (priorProcessorResult?.responseData.type === 'drayage' && priorProcessorResult.responseData.extracted) {
     finalExtraction = mergeExtractions(extraction, priorProcessorResult.responseData.extracted, rawMessage)
@@ -78,15 +65,11 @@ export async function processDrayage(
     }
   }
 
-  // Check for required fields
   const missingFields: string[] = []
   if (!finalExtraction.city) missingFields.push('Destination city')
   if (!finalExtraction.containerSize) missingFields.push('Container size (20, 40, 45, or 53 ft)')
 
-  let quote = null
-  if (missingFields.length === 0) {
-    quote = calculateDrayageQuote(finalExtraction)
-  }
+  const quote = missingFields.length === 0 ? calculateDrayageQuote(finalExtraction) : null
 
   const responseData: DrayageResponseData = {
     type: 'drayage',

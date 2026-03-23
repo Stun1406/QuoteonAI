@@ -2,6 +2,7 @@ import { extractWarehouseParameters } from '../llm/warehouse-extractor'
 import { calculateWarehouseQuote } from '../pricing/calculator'
 import type { PreprocessResult } from '../types/preprocessor'
 import type { ProcessorResult, WarehousingResponseData } from '../types/processor'
+import type { QuoteExtraction } from '../types/quote'
 
 interface WarehouseProcessorOptions {
   tenantId: string
@@ -10,6 +11,7 @@ interface WarehouseProcessorOptions {
   priorProcessorResult?: ProcessorResult | null
   rawMessage: string
   discountPct?: number
+  preExtracted?: QuoteExtraction | null
 }
 
 export async function processWarehouse(
@@ -17,9 +19,9 @@ export async function processWarehouse(
   options: WarehouseProcessorOptions
 ): Promise<ProcessorResult> {
   const startTime = Date.now()
-  const { tenantId, projectId, threadId, rawMessage, discountPct = 0 } = options
+  const { tenantId, projectId, threadId, rawMessage, discountPct = 0, preExtracted } = options
 
-  const extraction = await extractWarehouseParameters(rawMessage, { tenantId, projectId, threadId })
+  const extraction = preExtracted ?? await extractWarehouseParameters(rawMessage, { tenantId, projectId, threadId })
   const result = calculateWarehouseQuote(extraction, discountPct)
 
   const responseData: WarehousingResponseData = {

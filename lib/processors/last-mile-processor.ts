@@ -1,13 +1,14 @@
 import { extractLastMileParameters } from '../llm/last-mile-extractor'
 import { calculateLastMileQuote } from '../pricing/last-mile'
 import type { PreprocessResult } from '../types/preprocessor'
-import type { ProcessorResult, LastMileResponseData } from '../types/processor'
+import type { ProcessorResult, LastMileResponseData, LastMileExtraction } from '../types/processor'
 
 interface LastMileProcessorOptions {
   tenantId: string
   projectId: string
   threadId: string
   rawMessage: string
+  preExtracted?: LastMileExtraction | null
 }
 
 export async function processLastMile(
@@ -15,9 +16,9 @@ export async function processLastMile(
   options: LastMileProcessorOptions
 ): Promise<ProcessorResult> {
   const startTime = Date.now()
-  const { tenantId, projectId, threadId, rawMessage } = options
+  const { tenantId, projectId, threadId, rawMessage, preExtracted } = options
 
-  const extraction = await extractLastMileParameters(rawMessage, { tenantId, projectId, threadId })
+  const extraction = preExtracted ?? await extractLastMileParameters(rawMessage, { tenantId, projectId, threadId })
   const result = calculateLastMileQuote(extraction)
 
   const responseData: LastMileResponseData = {

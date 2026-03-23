@@ -8,7 +8,7 @@ import { calculateWarehouseQuote } from '@/lib/pricing/calculator'
 import { calculateLastMileQuote } from '@/lib/pricing/last-mile'
 import {
   getDefaultPricingLogicCatalog,
-  comparePricingLogicCatalogItems,
+  PRICING_CATEGORY_ORDER,
   type PricingLogicRate,
 } from '@/lib/pricing/pricing-logic-catalog'
 import type { DrayageExtraction, QuoteExtraction, DrayageQuoteResult } from '@/lib/types/quote'
@@ -1028,16 +1028,7 @@ export default function QuoteTool() {
       notes: [],
     }
 
-    const base = calculateDrayageQuote(extraction)
-
-    // Augment with chassis split and rush (not in core calculator)
-    const extraItems: typeof base.lineItems = []
-    if (dChassisSplit) extraItems.push({ code: 'CSPLIT', description: 'Chassis Split', amount: 75 })
-    if (dRush) extraItems.push({ code: 'RUSH', description: 'Rush Request', amount: 150 })
-
-    const allItems = [...base.lineItems, ...extraItems]
-    const subtotal = allItems.reduce((s, i) => s + i.amount, 0)
-    const result: DrayageQuoteResult = { ...base, lineItems: allItems, subtotal }
+    const result = calculateDrayageQuote(extraction)
 
     setDResult(result)
 
@@ -1261,7 +1252,7 @@ export default function QuoteTool() {
   }
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const pricingCategories = ['All', ...Array.from(new Set(pricingRates.map(r => r.category)))]
+  const pricingCategories = ['All', ...PRICING_CATEGORY_ORDER]
   const filteredRates = pricingRates
     .filter(r => {
       const matchCat = pricingCategory === 'All' || r.category === pricingCategory
@@ -1270,7 +1261,6 @@ export default function QuoteTool() {
         r.id.toLowerCase().includes(pricingSearch.toLowerCase())
       return matchCat && matchSearch
     })
-    .sort(comparePricingLogicCatalogItems)
 
   const changesCount = pricingRates.filter(r => r.currentValue !== r.defaultValue).length
 

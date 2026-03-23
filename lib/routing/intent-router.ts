@@ -3,7 +3,8 @@ import { processWarehouse } from '../processors/warehouse-processor'
 import { processLastMile } from '../processors/last-mile-processor'
 import { processGeneralInquiry } from '../processors/general-processor'
 import type { PreprocessResult, LogisticsFlow } from '../types/preprocessor'
-import type { ProcessorResult, HybridComponent, HybridResponseData } from '../types/processor'
+import type { ProcessorResult, HybridComponent, HybridResponseData, LastMileExtraction } from '../types/processor'
+import type { DrayageExtraction, QuoteExtraction } from '../types/quote'
 
 interface RouterOptions {
   tenantId: string
@@ -12,6 +13,10 @@ interface RouterOptions {
   priorProcessorResult?: ProcessorResult | null
   rawMessage: string
   discountPct?: number
+  // Pre-extracted params from unified extractor (skips per-type LLM extraction)
+  drayageParams?: DrayageExtraction | null
+  warehouseParams?: QuoteExtraction | null
+  lastMileParams?: LastMileExtraction | null
 }
 
 export async function routeMessage(
@@ -21,24 +26,14 @@ export async function routeMessage(
   const flows = preprocessResult.classifiedIntent.flows
   const uniqueFlows = [...new Set(flows)] as LogisticsFlow[]
 
-  // No logistics flows — general inquiry
-  // But if logistics flows were detected, route them even if overall isn't 'quote'
-  // to avoid the LLM general formatter generating fake placeholder prices
   if (uniqueFlows.length === 0) {
     return processGeneralInquiry(preprocessResult, options)
   }
 
-  if (preprocessResult.classifiedIntent.overall !== 'quote' && preprocessResult.intent === 'other') {
-    return processGeneralInquiry(preprocessResult, options)
-  }
-
-  // Single flow
   if (uniqueFlows.length === 1) {
-    const flow = uniqueFlows[0]
-    return routeSingleFlow(flow, preprocessResult, options)
+    return routeSingleFlow(uniqueFlows[0], preprocessResult, options)
   }
 
-  // Hybrid — multiple flows
   return routeHybrid(uniqueFlows, preprocessResult, options)
 }
 
@@ -49,12 +44,12 @@ async function routeSingleFlow(
 ): Promise<ProcessorResult> {
   switch (flow) {
     case 'drayage':
-      return processDrayage(preprocessResult, options)
+      return processDrayage(preprocessResult, { ...options, preExtracted: options.drayageParams })
     case 'warehousing':
     case 'transloading':
-      return processWarehouse(preprocessResult, { ...options, discountPct: options.discountPct ?? 0 })
+      return processWarehouse(preprocessResult, { ...options, discountPct: options.discountPct ?? 0, preExtracted: options.warehouseParams })
     case 'last-mile':
-      return processLastMile(preprocessResult, options)
+      return processLastMile(preprocessResult, { ...options, preExtracted: options.lastMileParams })
     default:
       return processGeneralInquiry(preprocessResult, options)
   }
@@ -67,40 +62,25 @@ async function routeHybrid(
 ): Promise<ProcessorResult> {
   const startTime = Date.now()
 
-  // Run each flow and track results + totals together
   const flowResults: Array<{ flow: LogisticsFlow; result: ProcessorResult; total: number }> = []
 
   for (const flow of flows) {
     const result = await routeSingleFlow(flow, preprocessResult, options)
     let total = 0
-
-    if (result.responseData.type === 'drayage') {
-      total = result.responseData.quote?.subtotal ?? 0
-    } else if (result.responseData.type === 'warehousing') {
-      total = result.responseData.result.total
-    } else if (result.responseData.type === 'last-mile') {
-      total = result.responseData.result.total
-    }
-
+    if (result.responseData.type === 'drayage') total = result.responseData.quote?.subtotal ?? 0
+    else if (result.responseData.type === 'warehousing') total = result.responseData.result.total
+    else if (result.responseData.type === 'last-mile') total = result.responseData.result.total
     flowResults.push({ flow, result, total })
   }
 
   const nonZero = flowResults.filter(r => r.total > 0)
 
-  // If only one flow produced a real quote, return it directly (avoids $0.00 hybrid wrapper)
-  if (nonZero.length === 1) {
-    return nonZero[0].result
-  }
-
-  // If no flow produced anything, return the primary flow so the formatter can show
-  // a proper "missing fields" message instead of a $0.00 combined total
+  if (nonZero.length === 1) return nonZero[0].result
   if (nonZero.length === 0) {
     const primaryFlow = preprocessResult.classifiedIntent.primaryFlow ?? flows[0]
-    const primary = flowResults.find(r => r.flow === primaryFlow) ?? flowResults[0]
-    return primary.result
+    return (flowResults.find(r => r.flow === primaryFlow) ?? flowResults[0]).result
   }
 
-  // Multiple flows with real data — build proper hybrid result
   const components: HybridComponent[] = flowResults.map(r => ({
     flow: r.flow,
     processorType: r.result.processorType,
@@ -109,17 +89,10 @@ async function routeHybrid(
   }))
 
   const totalsByFlow: Partial<Record<LogisticsFlow, number>> = {}
-  for (const r of flowResults) {
-    totalsByFlow[r.flow] = r.total
-  }
+  for (const r of flowResults) totalsByFlow[r.flow] = r.total
   const combinedTotal = nonZero.reduce((sum, r) => sum + r.total, 0)
 
-  const hybridData: HybridResponseData = {
-    type: 'hybrid',
-    components,
-    combinedTotal,
-    totalsByFlow,
-  }
+  const hybridData: HybridResponseData = { type: 'hybrid', components, combinedTotal, totalsByFlow }
 
   return {
     processorType: 'hybrid',

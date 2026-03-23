@@ -24,11 +24,13 @@ Return ONLY valid JSON. No markdown. No explanation. No preamble.
 - other: doesn't fit any category
 
 ## CRITICAL classification rules
+- Any email requesting a quote for moving a container (20ft/40ft/45ft/53ft) from a port (LA, Long Beach, POLB, POLA) to an inland destination = drayage. Classify as drayage even if chassis, pier pass, and TCF are not mentioned.
 - "Live unload" or "live unload hours" = drayage only (driver waits while container is unloaded at destination). Do NOT classify as transloading.
 - "Waiting time" or "detention" = drayage only. Do NOT classify as transloading.
 - "Chassis days" = drayage only.
 - Only classify as transloading if the email explicitly mentions palletizing, shrink wrap, BOL, or warehouse unloading/sorting.
 - A single email asking for a port-to-destination container move with accessorials (chassis, waiting, live unload, pier pass) = drayage only, not hybrid.
+- If intent is ambiguous between general-inquiry and drayage, and the email mentions a container size or destination city, choose drayage.
 
 ## Response Format
 {
@@ -152,10 +154,22 @@ export async function preprocessMessage(
 
   // Deterministic keyword fallback — if LLM missed drayage signals, force it
   const msgLower = text.toLowerCase()
-  const drayageKeywords = ['chassis', 'pier pass', 'pierpass', 'tcf', 'terminal clean', 'live unload',
-    'waiting time', 'detention', 'port of la', 'port of long beach', 'polb', 'pola', 'container move',
-    'drayage', 'drop fee', 'drop and pick', 'overweight surcharge']
+  const drayageKeywords = [
+    'chassis', 'pier pass', 'pierpass', 'tcf', 'terminal clean', 'live unload',
+    'waiting time', 'detention', 'port of la', 'port of long beach', 'polb', 'pola',
+    'container move', 'drayage', 'drop fee', 'drop and pick', 'overweight surcharge',
+    'port of los angeles', 'la port', 'lb port', 'long beach port', 'los angeles port',
+    'inland delivery', 'container delivery', 'import container', 'export container',
+  ]
+  // Container size patterns: 40ft, 40', 40 ft, 40-foot, 1x40, etc.
+  const containerSizePattern = /\b(20|40|45|53)\s*(?:ft|foot|'|"|\-foot)|\b1\s*[x×]\s*(?:20|40|45|53)|\b(?:20|40|45|53)\s*foot\b/i
+  // "quote" or "pricing" or "rate" alongside "container"
+  const containerQuotePattern = /\b(quote|pricing|rate|cost)\b.*\bcontainer\b|\bcontainer\b.*\b(quote|pricing|rate|cost)\b/i
+
   const hasDrayageSignal = drayageKeywords.some(kw => msgLower.includes(kw))
+    || containerSizePattern.test(text)
+    || containerQuotePattern.test(text)
+
   if (hasDrayageSignal && !classifiedIntent.flows.includes('drayage')) {
     classifiedIntent.flows = ['drayage', ...classifiedIntent.flows.filter(f => f !== 'drayage')]
     classifiedIntent.primaryFlow = 'drayage'
