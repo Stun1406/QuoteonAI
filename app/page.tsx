@@ -1,5 +1,5 @@
-import QuoteTool from '@/components/QuoteTool'
+import LandingPage from '@/components/LandingPage'
 
 export default function Home() {
-  return <QuoteTool />
+  return <LandingPage />
 }
