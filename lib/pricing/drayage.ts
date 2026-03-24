@@ -185,12 +185,24 @@ export function calculateDrayageQuote(extraction: DrayageExtraction): DrayageQuo
   const warnings: string[] = []
   let isEstimated = false
 
+  // Weight surcharge — tiered lookup (placed first)
+  if (containerWeightLbs && containerWeightLbs > 43000) {
+    const tier = DRAYAGE_WEIGHT_SURCHARGES.find(t => containerWeightLbs >= t.minLbs && containerWeightLbs <= t.maxLbs)
+    const surcharge = tier?.surcharge ?? DRAYAGE_WEIGHT_SURCHARGES[DRAYAGE_WEIGHT_SURCHARGES.length - 1].surcharge
+    const tierLabel = tier
+      ? tier.maxLbs === Infinity
+        ? `over 50,000 lbs`
+        : `${tier.minLbs.toLocaleString()}–${tier.maxLbs.toLocaleString()} lbs`
+      : 'over 50,000 lbs'
+    lineItems.push({ code: 'WTSUR', description: `Container Weight (${tierLabel})`, amount: surcharge })
+  }
+
   if (!cityRate) {
     isEstimated = true
-    warnings.push(`City "${city}" not found in standard rate sheet. Rate is estimated.`)
+    warnings.push(`Kindly confirm if the destination city is correct or let us know if a change is required.`)
     const estimatedBase = 380 + 30 * 3.85
     lineItems.push({ code: 'BASE', description: `Base Rate (estimated for ${city})`, amount: estimatedBase })
-    basisNotes.push('Estimated rate — city not found in standard rate sheet. Contact us for a firm quote.')
+    basisNotes.push('Estimated rate — please confirm destination city for a firm quote.')
   } else {
     lineItems.push({ code: 'BASE', description: `Base Rate — ${normalizeCityName(city)}`, amount: cityRate.base })
     basisNotes.push('Base rate includes standard port pickup from LA/LB terminals.')
@@ -200,13 +212,6 @@ export function calculateDrayageQuote(extraction: DrayageExtraction): DrayageQuo
       lineItems.push({ code: 'DROP', description: 'Drop Fee', amount: dropAmount })
       basisNotes.push(`Drop fee included for ${normalizeCityName(city)} (requires chassis drop).`)
     }
-  }
-
-  // Weight surcharge — tiered lookup
-  if (containerWeightLbs && containerWeightLbs > 43000) {
-    const tier = DRAYAGE_WEIGHT_SURCHARGES.find(t => containerWeightLbs >= t.minLbs && containerWeightLbs <= t.maxLbs)
-    const surcharge = tier?.surcharge ?? DRAYAGE_WEIGHT_SURCHARGES[DRAYAGE_WEIGHT_SURCHARGES.length - 1].surcharge
-    lineItems.push({ code: 'WTSUR', description: `Overweight Surcharge (${containerWeightLbs.toLocaleString()} lbs)`, amount: surcharge })
   }
 
   // Rush request
