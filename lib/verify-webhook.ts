@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, createHash, timingSafeEqual } from 'crypto'
 
 export function verifyWebhookSignature(
   formFields: Record<string, string>,
@@ -31,7 +31,6 @@ export function generateCanonicalId(
 ): string {
   if (messageId) return messageId
 
-  const { createHash } = require('crypto')
   const raw = `${from}|${subject}|${timestamp}`
   return createHash('sha256').update(raw).digest('hex').slice(0, 16)
 }

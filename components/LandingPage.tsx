@@ -70,7 +70,7 @@ function IconStar() {
 }
 function IconCheck() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   )
@@ -80,6 +80,22 @@ function IconArrow() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="12 5 19 12 12 19" />
+    </svg>
+  )
+}
+function IconArrowRight() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="13 6 19 12 13 18" />
+    </svg>
+  )
+}
+function IconArrowDown() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <polyline points="6 13 12 19 18 13" />
     </svg>
   )
 }
@@ -107,40 +123,34 @@ const PAIN_POINTS = [
 
 const WORKFLOW_STEPS = [
   {
-    n: '01',
     title: 'Intelligent Request Capture',
-    desc: 'Monitors your sales inbox and CRM. Classifies incoming requests using AI and understands intent and urgency.',
-    color: 'bg-blue-500',
+    desc: 'Monitors your sales inbox and CRM, classifies requests using AI, and understands intent and urgency.',
+    dot: 'bg-blue-500',
   },
   {
-    n: '02',
     title: 'Data & Context Intelligence',
-    desc: 'Extracts shipment or service details. Analyzes historical pricing, profitability, risk, and complexity.',
-    color: 'bg-indigo-500',
+    desc: 'Extracts shipment details. Analyzes historical pricing, profitability, risk, and complexity.',
+    dot: 'bg-indigo-500',
   },
   {
-    n: '03',
     title: 'AI Quote Generation',
-    desc: 'Generates accurate, competitive quotes. Considers all cost elements — fuel, accessorials, SLAs — and applies business rules.',
-    color: 'bg-violet-500',
+    desc: 'Generates accurate, competitive quotes considering all cost elements — fuel, accessorials, SLAs.',
+    dot: 'bg-violet-500',
   },
   {
-    n: '04',
     title: 'Smart Approval Loop',
     desc: 'Configurable approval thresholds with one-click validation for high-value quotes.',
-    color: 'bg-purple-500',
+    dot: 'bg-purple-500',
   },
   {
-    n: '05',
     title: 'Automated Response & Engagement',
-    desc: 'Sends professional quotes instantly. Handles follow-ups and revisions autonomously.',
-    color: 'bg-pink-500',
+    desc: 'Sends professional quotes instantly and handles follow-ups and revisions autonomously.',
+    dot: 'bg-pink-500',
   },
   {
-    n: '06',
     title: 'Continuous Learning Engine',
-    desc: 'Improves pricing accuracy over time. Learns from win/loss patterns to maximize margins.',
-    color: 'bg-rose-500',
+    desc: 'Improves pricing accuracy over time by learning from win/loss patterns to maximize margins.',
+    dot: 'bg-rose-500',
   },
 ]
 
@@ -179,33 +189,29 @@ const BENEFITS = [
   {
     icon: <IconChart />,
     title: 'Growth & Revenue',
-    color: 'text-blue-600',
-    ring: 'ring-blue-100',
-    bg: 'bg-blue-50',
+    color: 'text-blue-400',
+    iconBg: 'bg-blue-500/15',
     items: ['Increase quote win rates', 'Capture more opportunities', 'Faster response = higher conversion'],
   },
   {
     icon: <IconStar />,
     title: 'Profitability',
-    color: 'text-violet-600',
-    ring: 'ring-violet-100',
-    bg: 'bg-violet-50',
+    color: 'text-violet-400',
+    iconBg: 'bg-violet-500/15',
     items: ['Optimize pricing & margins', 'Reduce revenue leakage', 'Improve cost-to-serve'],
   },
   {
     icon: <IconZap />,
     title: 'Operational Efficiency',
-    color: 'text-amber-600',
-    ring: 'ring-amber-100',
-    bg: 'bg-amber-50',
+    color: 'text-amber-400',
+    iconBg: 'bg-amber-500/15',
     items: ['Reduce manual workload', 'Faster quote turnaround time', 'Standardized and consistent outputs'],
   },
   {
     icon: <IconUsers />,
     title: 'Customer Experience',
-    color: 'text-green-600',
-    ring: 'ring-green-100',
-    bg: 'bg-green-50',
+    color: 'text-green-400',
+    iconBg: 'bg-green-500/15',
     items: ['Real-time response', 'Professional and accurate quotes', 'Improved reliability'],
   },
 ]
@@ -221,8 +227,15 @@ const WHY_ITEMS = [
 const STATS = [
   { value: '10×', label: 'Faster quote turnaround' },
   { value: '24/7', label: 'Automated response capability' },
-  { value: '99%', label: 'Quote accuracy' },
-  { value: '40%', label: 'Win rate improvement' },
+  { value: '99.7%', label: 'Quote accuracy' },
+  { value: '70%', label: 'Win rate improvement' },
+]
+
+const OPERATORS = [
+  { icon: '🚢', label: 'Intermodal & Drayage Operators' },
+  { icon: '🤝', label: 'Freight Brokers' },
+  { icon: '🏭', label: '3PL / 4PL Providers' },
+  { icon: '🚛', label: 'Trucking Companies' },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -240,7 +253,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="mailto:demo@quotionai.com"
+              href="mailto:hello@lithiumq.com"
               className="hidden sm:inline-flex text-sm text-slate-300 hover:text-white transition px-4 py-2"
             >
               Book a Demo
@@ -260,12 +273,10 @@ export default function LandingPage() {
         className="relative pt-32 pb-28 overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #0A0F1E 0%, #0F172A 40%, #1E2A4A 70%, #0F172A 100%)' }}
       >
-        {/* Glow orbs */}
         <div className="absolute top-24 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-5xl mx-auto px-6 text-center">
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-medium mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
             Powered by Agentic AI
@@ -278,15 +289,28 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto mb-4 leading-relaxed">
-            Transform your Quote-to-Cash process with AI that understands, analyzes, and responds — faster, smarter, and more accurately than ever before.
+          {/* 2-line paragraph */}
+          <p className="text-lg sm:text-xl text-slate-300 max-w-lg mx-auto mb-6 leading-relaxed">
+            Transform your Quote-to-Cash with AI that understands,<br className="hidden sm:block" />
+            analyzes, and responds — faster and smarter than ever.
           </p>
 
-          <ul className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-sm text-slate-400 mb-10">
-            <li className="flex items-center gap-2"><span className="text-blue-400">✦</span> From Inquiry to Quote in Seconds</li>
-            <li className="flex items-center gap-2"><span className="text-blue-400">✦</span> Better Margins. Smarter Decisions.</li>
-            <li className="flex items-center gap-2"><span className="text-blue-400">✦</span> 24×7 AI-Powered Response</li>
-          </ul>
+          {/* Highlighted pill bullets */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
+            {[
+              'From Inquiry to Quote in Seconds',
+              'Better Margins. Smarter Decisions.',
+              '24×7 AI-Powered Response',
+            ].map(tag => (
+              <span
+                key={tag}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-200 text-sm font-semibold backdrop-blur-sm"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                {tag}
+              </span>
+            ))}
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
@@ -296,7 +320,7 @@ export default function LandingPage() {
               Get Started <IconArrow />
             </Link>
             <a
-              href="mailto:demo@quotionai.com"
+              href="mailto:hello@lithiumq.com"
               className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium rounded-xl transition"
             >
               Book a Demo
@@ -338,31 +362,149 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── How It Works ── */}
+      {/* ── How It Works (arrow flow) ── */}
       <section className="py-24 bg-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
             <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">The Solution</p>
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">How QuotionAI Works</h2>
             <p className="text-slate-500 max-w-xl mx-auto">
-              An end-to-end AI-powered quoting platform that automates the entire process — from request intake to quote delivery and follow-up.
+              An end-to-end AI-powered platform that automates the entire process — from request intake to quote delivery and follow-up.
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {WORKFLOW_STEPS.map(step => (
-              <div key={step.n} className="group relative bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-                <div className={`w-10 h-10 rounded-xl ${step.color} flex items-center justify-center text-white text-sm font-bold mb-4`}>
-                  {step.n}
+
+          {/* Desktop: two rows of 3 with arrows */}
+          <div className="hidden lg:block space-y-4">
+            {/* Row 1 */}
+            <div className="flex items-stretch gap-2">
+              {WORKFLOW_STEPS.slice(0, 3).map((step, i) => (
+                <div key={step.title} className="flex items-stretch gap-2 flex-1">
+                  <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                  </div>
+                  {i < 2 && (
+                    <div className="flex items-center flex-shrink-0 text-blue-300">
+                      <IconArrowRight />
+                    </div>
+                  )}
                 </div>
-                <h3 className="font-semibold text-slate-800 mb-2">{step.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+              ))}
+            </div>
+
+            {/* Down-right connector between rows */}
+            <div className="flex justify-end pr-2">
+              <div className="flex items-center gap-1.5 text-slate-300 text-xs">
+                <IconArrowDown />
+              </div>
+            </div>
+
+            {/* Row 2 — reversed direction */}
+            <div className="flex items-stretch gap-2 flex-row-reverse">
+              {WORKFLOW_STEPS.slice(3).map((step, i) => (
+                <div key={step.title} className="flex items-stretch gap-2 flex-1 flex-row-reverse">
+                  <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                  </div>
+                  {i < 2 && (
+                    <div className="flex items-center flex-shrink-0 text-blue-300 rotate-180">
+                      <IconArrowRight />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile: vertical with down arrows */}
+          <div className="lg:hidden flex flex-col items-center gap-2">
+            {WORKFLOW_STEPS.map((step, i) => (
+              <div key={step.title} className="w-full flex flex-col items-center gap-2">
+                <div className="w-full bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                  <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
+                  <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                </div>
+                {i < WORKFLOW_STEPS.length - 1 && (
+                  <div className="text-blue-300">
+                    <IconArrowDown />
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Features ── */}
+      {/* ── Industry Focus ── */}
+      <section className="py-24 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">Industry Focus</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">
+              Built for Any Industry with a Sales Quote Process
+            </h2>
+            <p className="text-slate-500 max-w-xl mx-auto">
+              QuotionAI adapts to any business that generates quotes — from logistics to SaaS to professional services.
+            </p>
+          </div>
+
+          {/* Test Case box */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 mb-8">
+            <div className="flex items-center gap-2 mb-6">
+              <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold uppercase tracking-wider">
+                Test Case
+              </span>
+              <span className="text-slate-600 font-semibold">Freight & Logistics Companies</span>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-8 items-start">
+              {/* Operators box */}
+              <div>
+                <p className="text-sm font-medium text-slate-500 mb-4">Purpose-built for logistics providers including:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {OPERATORS.map(op => (
+                    <div key={op.label} className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-100 px-4 py-3.5">
+                      <span className="text-xl leading-none">{op.icon}</span>
+                      <span className="text-sm font-medium text-slate-700 leading-snug">{op.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Capability cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: <IconTruck />, title: 'Lane-based Pricing', desc: 'Intelligent lane pricing from your rate sheets' },
+                  { icon: <IconChart />, title: 'Margin Optimization', desc: 'Per-shipment margin analysis and guidance' },
+                  { icon: <IconZap />, title: 'Accessorial Automation', desc: 'Automatic surcharge calculation' },
+                  { icon: <IconBrain />, title: 'CRM Intelligence', desc: 'Analytics and customer insights built in' },
+                ].map(card => (
+                  <div key={card.title} className="bg-slate-50 rounded-xl border border-slate-100 p-4 hover:border-blue-100 hover:bg-blue-50/30 transition">
+                    <div className="text-blue-600 mb-2">{card.icon}</div>
+                    <h4 className="font-semibold text-slate-800 text-sm mb-1">{card.title}</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">{card.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Other industries strip */}
+          <div className="flex flex-wrap justify-center gap-3">
+            {['Manufacturing', 'SaaS', 'Professional Services', 'Retail & Distribution', 'e-Commerce', 'Hospitality'].map(ind => (
+              <span key={ind} className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm">
+                {ind}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Features (dark) ── */}
       <section
         className="py-24"
         style={{ background: 'linear-gradient(135deg, #0A0F1E 0%, #0F172A 60%, #1A1F35 100%)' }}
@@ -394,67 +536,32 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Industry Use Case ── */}
-      <section className="py-24 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">Industry Focus</p>
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-5">
-                Built for Modern Freight & Logistics Companies
-              </h2>
-              <p className="text-slate-500 leading-relaxed mb-8">
-                QuotionAI is purpose-built for logistics providers who need to respond faster, price smarter, and scale operations without increasing headcount.
-              </p>
-              <ul className="space-y-3">
-                {['Intermodal & Drayage Operators', 'Freight Brokers', '3PL / 4PL Providers', 'Trucking Companies'].map(item => (
-                  <li key={item} className="flex items-center gap-3 text-slate-700">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-                      <IconCheck />
-                    </span>
-                    <span className="font-medium">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { icon: <IconTruck />, title: 'Lane-based Pricing', desc: 'Intelligent lane pricing from your rate sheets' },
-                { icon: <IconChart />, title: 'Margin Optimization', desc: 'Per-shipment margin analysis and guidance' },
-                { icon: <IconZap />, title: 'Accessorial Automation', desc: 'Automatic surcharge calculation' },
-                { icon: <IconBrain />, title: 'CRM Intelligence', desc: 'Analytics and customer insights built in' },
-              ].map(card => (
-                <div key={card.title} className="bg-slate-50 rounded-2xl border border-slate-100 p-5 hover:border-blue-100 hover:bg-blue-50/30 transition">
-                  <div className="text-blue-600 mb-3">{card.icon}</div>
-                  <h4 className="font-semibold text-slate-800 text-sm mb-1">{card.title}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">{card.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Benefits ── */}
-      <section className="py-24 bg-slate-50">
+      {/* ── Benefits (dark, matching Features) ── */}
+      <section
+        className="py-24"
+        style={{ background: 'linear-gradient(135deg, #111827 0%, #0F172A 50%, #1E1B4B 100%)' }}
+      >
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
-            <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">Business Benefits</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">The Impact on Your Business</h2>
-            <p className="text-slate-500 max-w-xl mx-auto">
+            <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Business Benefits</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">The Impact on Your Business</h2>
+            <p className="text-slate-400 max-w-xl mx-auto">
               QuotionAI delivers measurable results across every dimension of your quoting operation.
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {BENEFITS.map(b => (
-              <div key={b.title} className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition">
-                <div className={`w-12 h-12 rounded-2xl ${b.bg} ring-4 ${b.ring} flex items-center justify-center ${b.color} mb-4`}>
+              <div
+                key={b.title}
+                className="rounded-2xl border border-white/8 bg-white/[0.04] hover:bg-white/[0.08] p-6 hover:scale-[1.02] transition-all duration-200"
+              >
+                <div className={`w-12 h-12 rounded-2xl ${b.iconBg} flex items-center justify-center ${b.color} mb-4`}>
                   {b.icon}
                 </div>
-                <h3 className="font-semibold text-slate-800 mb-3">{b.title}</h3>
+                <h3 className="font-semibold text-white mb-3">{b.title}</h3>
                 <ul className="space-y-2">
                   {b.items.map(item => (
-                    <li key={item} className="flex items-start gap-2 text-sm text-slate-500">
+                    <li key={item} className="flex items-start gap-2 text-sm text-slate-400">
                       <span className={`${b.color} mt-0.5 flex-shrink-0`}><IconCheck /></span>
                       {item}
                     </li>
@@ -509,7 +616,7 @@ export default function LandingPage() {
               Start Your AI Transformation <IconArrow />
             </Link>
             <a
-              href="mailto:demo@quotionai.com"
+              href="mailto:hello@lithiumq.com"
               className="inline-flex items-center gap-2 px-8 py-4 bg-blue-500/20 border border-white/20 text-white font-medium rounded-xl hover:bg-blue-500/30 transition"
             >
               Book a Demo
@@ -519,18 +626,24 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="bg-[#0A0F1E] border-t border-white/5 py-10">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <LogoIcon />
-            <span className="text-white font-semibold">QuotionAI</span>
+      <footer className="bg-[#0A0F1E] border-t border-white/5 pt-10 pb-6">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-2.5">
+              <LogoIcon />
+              <span className="text-white font-semibold">QuotionAI</span>
+            </div>
+            <p className="text-slate-500 text-sm">
+              Intelligent Sales Quoting Powered by Agentic AI
+            </p>
+            <Link href="/login" className="text-sm text-slate-400 hover:text-white transition">
+              Sign In →
+            </Link>
           </div>
-          <p className="text-slate-500 text-sm">
-            Intelligent Sales Quoting Powered by Agentic AI
-          </p>
-          <Link href="/login" className="text-sm text-slate-400 hover:text-white transition">
-            Sign In →
-          </Link>
+          <div className="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
+            <span>© {new Date().getFullYear()} LithiumQ. All rights reserved.</span>
+            <span>QuotionAI is a product of LithiumQ · <a href="mailto:hello@lithiumq.com" className="hover:text-slate-400 transition">hello@lithiumq.com</a></span>
+          </div>
         </div>
       </footer>
 

@@ -16,9 +16,11 @@ export const authConfig: NextAuthConfig = {
       const isApiAuth = nextUrl.pathname.startsWith('/api/auth')
 
       const isLandingPage = nextUrl.pathname === '/'
+      const isWebhook = nextUrl.pathname.startsWith('/api/webhooks/')
 
       if (isApiAuth) return true
       if (isLandingPage) return true
+      if (isWebhook) return true
       if (isLoginPage) {
         if (isLoggedIn) return Response.redirect(new URL('/app', nextUrl))
         return true
