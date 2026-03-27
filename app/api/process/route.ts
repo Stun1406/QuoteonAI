@@ -146,11 +146,11 @@ export async function POST(req: NextRequest) {
     if (processorResult.responseData.type === 'drayage') {
       quoteValue = processorResult.responseData.quote?.subtotal ?? null
     } else if (processorResult.responseData.type === 'warehousing') {
-      quoteValue = processorResult.responseData.result.total
+      quoteValue = processorResult.responseData.result?.total ?? null
     } else if (processorResult.responseData.type === 'last-mile') {
-      quoteValue = processorResult.responseData.result.total
+      quoteValue = processorResult.responseData.result?.total ?? null
     } else if (processorResult.responseData.type === 'hybrid') {
-      quoteValue = processorResult.responseData.combinedTotal
+      quoteValue = processorResult.responseData.combinedTotal ?? null
     }
 
     // Update thread

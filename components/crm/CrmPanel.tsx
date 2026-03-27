@@ -79,6 +79,7 @@ interface Shipment {
   service_type: string | null
   pickup_date: string | null
   delivery_date: string | null
+  actual_pickup: string | null
   actual_delivery: string | null
   status: string
   quote_value: number | null
