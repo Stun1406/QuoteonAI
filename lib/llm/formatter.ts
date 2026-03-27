@@ -52,6 +52,16 @@ function sanitizeName(name: string | null): string {
   return cleaned
 }
 
+function firstName(name: string): string {
+  return name.split(' ')[0]
+}
+
+function categoryForCode(code: string): string {
+  if (code === 'BASE' || code === 'DROP') return 'Base Rate'
+  if (code === 'WTSUR') return 'Surcharge'
+  return 'Accessorial'
+}
+
 function formatDrayageResult(
   data: DrayageResponseData,
   contactInfo: ContactInfo,
@@ -88,30 +98,49 @@ Operations Lead | FL Distributions
 
   const subject = `Drayage Quote – ${quote.city.toUpperCase()} – ${quote.containerSize} ft Container`
 
-  const basisText = quote.basisNotes.length > 0 ? quote.basisNotes.join('\n') : 'Base rate includes standard port pickup from LA/LB terminals.'
-  const notesText = [...(data.notes ?? []), ...quote.warnings].filter(Boolean)
+  const basisNotes = quote.basisNotes.length > 0
+    ? quote.basisNotes
+    : ['Base rate includes standard port pickup from LA/LB terminals.']
+  const notesAndWarnings = [...(data.notes ?? []), ...quote.warnings].filter(Boolean)
+
+  const weightStr = quote.containerWeightLbs ? quote.containerWeightLbs.toLocaleString() + ' lbs' : 'not specified'
 
   const tableRows = quote.lineItems.map(item =>
-    `| ${item.description.padEnd(42)} | ${formatCurrency(item.amount).padStart(10)} |`
+    `| ${categoryForCode(item.code)} | ${item.description} | ${formatCurrency(item.amount)} |`
   ).join('\n')
 
-  const body = `Hi ${name},
+  const fn = firstName(name)
 
-Thank you for reaching out!${isRush ? ' We understand this is urgent and have prioritized your quote.' : ''} Please find your drayage quote below.
+  const body = `Hi ${fn},
 
-**Destination:** ${quote.city}  |  **Container:** ${quote.containerSize} ft  |  **Weight:** ${quote.containerWeightLbs ? quote.containerWeightLbs.toLocaleString() + ' lbs' : 'Not specified'}
+Thank you for reaching out.${isRush ? ' We understand this is urgent and have prioritized your quote.' : ''} We are pleased to provide you with a drayage quote for your ${quote.containerSize}-foot container to ${quote.city}${quote.containerWeightLbs ? `, with a cargo weight of ${weightStr}` : ''}. Below is a detailed summary of the pricing for your request.
 
-| Description                                        | Amount     |
-|--------------------------------------------|------------|
+Quote Summary:
+
+| Category | Item | Amount (USD) |
+|---|---|---|
 ${tableRows}
-| **TOTAL**                                          | **${formatCurrency(quote.subtotal)}** |
+| **Total** | | **${formatCurrency(quote.subtotal)}** |
 
-**Basis:** ${basisText}
-${notesText.length > 0 ? '\n**Notes:** ' + notesText.join(' | ') : ''}
+Total
+The grand total for this drayage service is ${formatCurrency(quote.subtotal)} USD. This amount reflects the sum of all line items listed in the table above.
+
+Basis for Quote
+${basisNotes.map(n => `- ${n}`).join('\n')}
+${notesAndWarnings.length > 0 ? notesAndWarnings.map(n => `- ${n}`).join('\n') : ''}
+
+Notes & Assumptions
+- Quote is based on standard port pickup from the LA/LB terminal complex.
+- Rates are valid at the time of quotation and subject to change.
+- Any additional accessorials not listed above will be invoiced separately.
+
+If you have any further questions or need additional services, please feel free to reach out.
 
 Best Regards,
+
 Jacob Hernandez
-Operations Lead | FL Distributions
+Operations Lead
+FL Distribution
 (424) 555-0187`
 
   return {
@@ -153,22 +182,41 @@ function formatLastMileResult(
   const name = sanitizeName(contactInfo.name)
   const subject = 'Last-Mile Delivery Quote – FL Distribution'
 
+  const fn = firstName(name)
   const tableRows = data.result.lineItems.map(item =>
-    `| ${item.description.padEnd(42)} | ${formatCurrency(item.amount).padStart(10)} |`
+    `| Delivery | ${item.description} | ${formatCurrency(item.amount)} |`
   ).join('\n')
 
-  const body = `Hi ${name},
+  const body = `Hi ${fn},
 
-Thank you for reaching out to FL Distribution! Please find your last-mile delivery quote below.
+Thank you for reaching out. We are pleased to provide you with a last-mile delivery quote based on your request. Below is a detailed summary of the pricing.
 
-| Description                                        | Amount     |
-|--------------------------------------------|------------|
+Quote Summary:
+
+| Category | Item | Amount (USD) |
+|---|---|---|
 ${tableRows}
-| **TOTAL**                                          | **${formatCurrency(data.result.total)}** |
+| **Total** | | **${formatCurrency(data.result.total)}** |
+
+Total
+The grand total for this last-mile delivery service is ${formatCurrency(data.result.total)} USD. This amount reflects the sum of all line items listed in the table above.
+
+Basis for Quote
+- Quote is based on the delivery details provided in your request.
+- Rates reflect current last-mile delivery pricing.
+
+Notes & Assumptions
+- Delivery addresses and stop counts are as specified in your request.
+- Rates are valid at the time of quotation and subject to change.
+- Additional stops or special handling requirements not listed above will be invoiced separately.
+
+If you have any further questions or need additional services, please feel free to reach out.
 
 Best Regards,
+
 Jacob Hernandez
-Operations Lead | FL Distributions
+Operations Lead
+FL Distribution
 (424) 555-0187`
 
   return {

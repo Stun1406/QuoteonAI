@@ -20,27 +20,57 @@ export async function formatWarehouseQuoteEmail(params: FormatWarehouseQuotePara
     `- ${item.description}: ${item.quantity} × $${item.unitPrice} = ${formatCurrency(item.total)}`
   ).join('\n')
 
+  const firstName = (contactInfo.name || 'Team').split(' ')[0]
+  const discountLine = result.discountPct > 0
+    ? `Discount (${result.discountPct}%): -${formatCurrency(result.discountAmount)}\n` : ''
+
   const prompt = `You are writing a professional quote email for FL Distribution, a Southern California warehousing and freight logistics company.
 
-Customer: ${contactInfo.name || 'Team'} ${contactInfo.company ? `from ${contactInfo.company}` : ''}
-Original request: ${originalMessage.slice(0, 500)}
+Customer first name: ${firstName}
+Original request: ${originalMessage.slice(0, 600)}
 
-Quote summary:
+Line items:
 ${lineItemsSummary}
-Subtotal: ${formatCurrency(result.subtotal)}
-${result.discountPct > 0 ? `Discount (${result.discountPct}%): -${formatCurrency(result.discountAmount)}` : ''}
-Total: ${formatCurrency(result.total)}
+${discountLine}Total: ${formatCurrency(result.total)}
 
-${result.warnings.length > 0 ? `Notes: ${result.warnings.join('; ')}` : ''}
+${result.warnings.length > 0 ? `Warnings/notes from the system: ${result.warnings.join('; ')}` : ''}
 
-Write a professional, concise quote email. Include:
-1. Brief greeting using the customer's first name (or "Team" if unknown)
-2. The quote line items as a markdown table with exactly these columns: | Description | Amount |
-3. A separator row after the header: |---|---|
-4. A bold TOTAL row at the bottom: | **TOTAL** | **$X.XX** |
-5. The signature: Jacob Hernandez, Operations Lead, FL Distributions, (424) 555-0187
+Write the email body using EXACTLY this structure (do not deviate from the format):
 
-Use markdown table format (pipe-separated). Do not use HTML. Keep it professional and data-focused.`
+Hi ${firstName},
+
+Thank you for reaching out. [Write 1–2 sentences summarising what the customer requested, referencing the specific service type, container size, number of pallets, and any special handling from the original request.]
+
+Quote Summary:
+
+| Category | Item | Amount (USD) |
+|---|---|---|
+[For each line item, assign a Category (use: Transloading / Accessorial / Documentation / Storage / Discount) based on what the item is. Use the exact item description from the line items above. Format amounts as $X.XX]
+| **Total** | | **${formatCurrency(result.total)}** |
+
+Total
+The grand total for this service is ${formatCurrency(result.total)} USD. This amount reflects the sum of all line items listed in the table above.
+
+Basis for Quote
+[Write 2–4 bullet points (using - ) explaining the key facts the quote is based on — e.g. number of containers, pallet count, container size, services included, services excluded.]
+
+Notes & Assumptions
+[Write 2–3 bullet points (using - ) covering assumptions made — e.g. pallets are standard size, no additional handling required, rates are based on current pricing.]
+
+If you have any further questions or need additional services, please feel free to reach out.
+
+Best Regards,
+
+Jacob Hernandez
+Operations Lead
+FL Distribution
+(424) 555-0187
+
+Rules:
+- Use the exact table format above with pipe characters
+- Do not add extra sections or change section names
+- Do not use HTML
+- Do not add a subject line`
 
   const response = await openai.chat.completions.create({
     model: MODEL,

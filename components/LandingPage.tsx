@@ -242,7 +242,10 @@ const OPERATORS = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div
+      className="min-h-screen"
+      style={{ background: '#0A0F1E', fontFamily: 'Inter, system-ui, sans-serif' }}
+    >
 
       {/* ── Nav ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0F1E]/90 backdrop-blur-md border-b border-white/5">
@@ -269,10 +272,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section
-        className="relative pt-32 pb-28 overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0A0F1E 0%, #0F172A 40%, #1E2A4A 70%, #0F172A 100%)' }}
-      >
+      <section className="relative pt-32 pb-28 overflow-hidden">
         <div className="absolute top-24 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -289,13 +289,11 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          {/* 2-line paragraph */}
           <p className="text-lg sm:text-xl text-slate-300 max-w-lg mx-auto mb-6 leading-relaxed">
             Transform your Quote-to-Cash with AI that understands,<br className="hidden sm:block" />
             analyzes, and responds — faster and smarter than ever.
           </p>
 
-          {/* Highlighted pill bullets */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
             {[
               'From Inquiry to Quote in Seconds',
@@ -342,50 +340,49 @@ export default function LandingPage() {
       </section>
 
       {/* ── Problem ── */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-24 border-t border-white/5">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
-            <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">The Problem</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Why Traditional Sales Quoting Fails</h2>
-            <p className="text-slate-500 max-w-xl mx-auto">
+            <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">The Problem</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Why Traditional Sales Quoting Fails</h2>
+            <p className="text-slate-400 max-w-xl mx-auto">
               Across industries, sales quoting is broken — directly impacting customer experience, profitability, and growth.
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {PAIN_POINTS.map(p => (
-              <div key={p.label} className="flex items-start gap-4 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition">
+              <div key={p.label} className="flex items-start gap-4 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] transition">
                 <span className="text-2xl leading-none mt-0.5">{p.icon}</span>
-                <span className="text-slate-700 font-medium text-sm leading-relaxed">{p.label}</span>
+                <span className="text-slate-300 font-medium text-sm leading-relaxed">{p.label}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── How It Works (arrow flow) ── */}
-      <section className="py-24 bg-white">
+      {/* ── How It Works ── */}
+      <section className="py-24 border-t border-white/5">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
-            <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">The Solution</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">How QuotionAI Works</h2>
-            <p className="text-slate-500 max-w-xl mx-auto">
+            <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">The Solution</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">How QuotionAI Works</h2>
+            <p className="text-slate-400 max-w-xl mx-auto">
               An end-to-end AI-powered platform that automates the entire process — from request intake to quote delivery and follow-up.
             </p>
           </div>
 
           {/* Desktop: two rows of 3 with arrows */}
           <div className="hidden lg:block space-y-4">
-            {/* Row 1 */}
             <div className="flex items-stretch gap-2">
               {WORKFLOW_STEPS.slice(0, 3).map((step, i) => (
                 <div key={step.title} className="flex items-stretch gap-2 flex-1">
-                  <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                  <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
                     <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                    <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                   </div>
                   {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-300">
+                    <div className="flex items-center flex-shrink-0 text-blue-500/60">
                       <IconArrowRight />
                     </div>
                   )}
@@ -393,24 +390,22 @@ export default function LandingPage() {
               ))}
             </div>
 
-            {/* Down-right connector between rows */}
             <div className="flex justify-end pr-2">
-              <div className="flex items-center gap-1.5 text-slate-300 text-xs">
+              <div className="text-blue-500/60">
                 <IconArrowDown />
               </div>
             </div>
 
-            {/* Row 2 — reversed direction */}
             <div className="flex items-stretch gap-2 flex-row-reverse">
               {WORKFLOW_STEPS.slice(3).map((step, i) => (
                 <div key={step.title} className="flex items-stretch gap-2 flex-1 flex-row-reverse">
-                  <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                  <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
                     <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                    <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                   </div>
                   {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-300 rotate-180">
+                    <div className="flex items-center flex-shrink-0 text-blue-500/60 rotate-180">
                       <IconArrowRight />
                     </div>
                   )}
@@ -423,13 +418,13 @@ export default function LandingPage() {
           <div className="lg:hidden flex flex-col items-center gap-2">
             {WORKFLOW_STEPS.map((step, i) => (
               <div key={step.title} className="w-full flex flex-col items-center gap-2">
-                <div className="w-full bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                <div className="w-full bg-white/[0.04] rounded-2xl border border-white/8 p-5">
                   <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
-                  <h3 className="font-semibold text-slate-800 text-sm mb-2">{step.title}</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                  <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                 </div>
                 {i < WORKFLOW_STEPS.length - 1 && (
-                  <div className="text-blue-300">
+                  <div className="text-blue-500/60">
                     <IconArrowDown />
                   </div>
                 )}
@@ -440,42 +435,40 @@ export default function LandingPage() {
       </section>
 
       {/* ── Industry Focus ── */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-24 border-t border-white/5">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
-            <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">Industry Focus</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">
+            <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Industry Focus</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Built for Any Industry with a Sales Quote Process
             </h2>
-            <p className="text-slate-500 max-w-xl mx-auto">
+            <p className="text-slate-400 max-w-xl mx-auto">
               QuotionAI adapts to any business that generates quotes — from logistics to SaaS to professional services.
             </p>
           </div>
 
           {/* Test Case box */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 mb-8">
+          <div className="bg-white/[0.04] rounded-3xl border border-white/8 p-8 mb-8">
             <div className="flex items-center gap-2 mb-6">
-              <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold uppercase tracking-wider">
+              <span className="px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-semibold uppercase tracking-wider">
                 Test Case
               </span>
-              <span className="text-slate-600 font-semibold">Freight & Logistics Companies</span>
+              <span className="text-slate-300 font-semibold">Freight & Logistics Companies</span>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-8 items-start">
-              {/* Operators box */}
               <div>
-                <p className="text-sm font-medium text-slate-500 mb-4">Purpose-built for logistics providers including:</p>
+                <p className="text-sm font-medium text-slate-400 mb-4">Purpose-built for logistics providers including:</p>
                 <div className="grid grid-cols-2 gap-3">
                   {OPERATORS.map(op => (
-                    <div key={op.label} className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-100 px-4 py-3.5">
+                    <div key={op.label} className="flex items-center gap-3 bg-white/[0.05] rounded-xl border border-white/8 px-4 py-3.5 hover:bg-white/[0.08] transition">
                       <span className="text-xl leading-none">{op.icon}</span>
-                      <span className="text-sm font-medium text-slate-700 leading-snug">{op.label}</span>
+                      <span className="text-sm font-medium text-slate-300 leading-snug">{op.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Capability cards */}
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { icon: <IconTruck />, title: 'Lane-based Pricing', desc: 'Intelligent lane pricing from your rate sheets' },
@@ -483,10 +476,10 @@ export default function LandingPage() {
                   { icon: <IconZap />, title: 'Accessorial Automation', desc: 'Automatic surcharge calculation' },
                   { icon: <IconBrain />, title: 'CRM Intelligence', desc: 'Analytics and customer insights built in' },
                 ].map(card => (
-                  <div key={card.title} className="bg-slate-50 rounded-xl border border-slate-100 p-4 hover:border-blue-100 hover:bg-blue-50/30 transition">
-                    <div className="text-blue-600 mb-2">{card.icon}</div>
-                    <h4 className="font-semibold text-slate-800 text-sm mb-1">{card.title}</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed">{card.desc}</p>
+                  <div key={card.title} className="bg-white/[0.05] rounded-xl border border-white/8 p-4 hover:bg-white/[0.09] hover:border-blue-500/30 transition">
+                    <div className="text-blue-400 mb-2">{card.icon}</div>
+                    <h4 className="font-semibold text-white text-sm mb-1">{card.title}</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">{card.desc}</p>
                   </div>
                 ))}
               </div>
@@ -496,7 +489,7 @@ export default function LandingPage() {
           {/* Other industries strip */}
           <div className="flex flex-wrap justify-center gap-3">
             {['Manufacturing', 'SaaS', 'Professional Services', 'Retail & Distribution', 'e-Commerce', 'Hospitality'].map(ind => (
-              <span key={ind} className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm">
+              <span key={ind} className="px-4 py-2 rounded-full bg-white/[0.05] border border-white/10 text-slate-400 text-sm font-medium">
                 {ind}
               </span>
             ))}
@@ -504,11 +497,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Features (dark) ── */}
-      <section
-        className="py-24"
-        style={{ background: 'linear-gradient(135deg, #0A0F1E 0%, #0F172A 60%, #1A1F35 100%)' }}
-      >
+      {/* ── Features ── */}
+      <section className="py-24 border-t border-white/5" style={{ background: 'linear-gradient(180deg, #0A0F1E 0%, #0D1528 50%, #0A0F1E 100%)' }}>
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
             <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Key Features</p>
@@ -536,11 +526,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Benefits (dark, matching Features) ── */}
-      <section
-        className="py-24"
-        style={{ background: 'linear-gradient(135deg, #111827 0%, #0F172A 50%, #1E1B4B 100%)' }}
-      >
+      {/* ── Benefits ── */}
+      <section className="py-24 border-t border-white/5" style={{ background: 'linear-gradient(180deg, #0A0F1E 0%, #0F0D1E 50%, #0A0F1E 100%)' }}>
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
             <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Business Benefits</p>
@@ -574,20 +561,20 @@ export default function LandingPage() {
       </section>
 
       {/* ── Why QuotionAI ── */}
-      <section className="py-24 bg-white">
+      <section className="py-24 border-t border-white/5">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <p className="text-blue-600 text-sm font-semibold uppercase tracking-widest mb-3">Why QuotionAI</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-5">Built Different, By Design</h2>
-          <p className="text-slate-500 max-w-xl mx-auto mb-12">
+          <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Why QuotionAI</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5">Built Different, By Design</h2>
+          <p className="text-slate-400 max-w-xl mx-auto mb-12">
             Not just another quoting tool — a fully autonomous AI agent purpose-built for the complexity of modern sales.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
             {WHY_ITEMS.map((item, i) => (
-              <div key={i} className="flex items-start gap-3 bg-slate-50 rounded-xl border border-slate-100 p-4">
+              <div key={i} className="flex items-start gap-3 bg-white/[0.04] rounded-xl border border-white/8 p-4 hover:bg-white/[0.07] transition">
                 <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white flex-shrink-0">
                   <IconCheck />
                 </span>
-                <span className="text-sm text-slate-700 font-medium leading-snug">{item}</span>
+                <span className="text-sm text-slate-300 font-medium leading-snug">{item}</span>
               </div>
             ))}
           </div>
@@ -596,7 +583,7 @@ export default function LandingPage() {
 
       {/* ── CTA ── */}
       <section
-        className="py-24 relative overflow-hidden"
+        className="py-24 relative overflow-hidden border-t border-white/5"
         style={{ background: 'linear-gradient(135deg, #1E3A5F 0%, #1E40AF 50%, #1E3A5F 100%)' }}
       >
         <div className="absolute top-0 left-1/3 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
@@ -626,7 +613,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="bg-[#0A0F1E] border-t border-white/5 pt-10 pb-6">
+      <footer className="border-t border-white/5 pt-10 pb-6">
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-2.5">
