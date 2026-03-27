@@ -69,8 +69,9 @@ export async function POST(req: NextRequest) {
 
     const apiKeyValid = expectedApiKey !== '' && apiKey === expectedApiKey
     const hmacValid = secret !== '' && verifyWebhookSignature(payload.formFields, signature, secret)
+    const authConfigured = expectedApiKey !== '' || secret !== ''
 
-    if (expectedApiKey || secret) {
+    if (authConfigured) {
       if (!apiKeyValid && !hmacValid) {
         console.warn('[webhook/email] Auth failed — apiKey present:', !!apiKey, '| sig present:', !!signature)
         await logEmailFailure({
@@ -81,6 +82,8 @@ export async function POST(req: NextRequest) {
         }).catch(() => {})
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
+    } else {
+      console.warn('[webhook/email] No auth configured — accepting unauthenticated request. Set EMAIL_WORKER_API_KEY or WEBHOOK_SECRET in production.')
     }
 
     const { raw: rawEmail, messageId: messageIdHeader, from: fromHeader,

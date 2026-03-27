@@ -16,7 +16,7 @@ export async function GET(
         LIMIT 1
       `,
       sql`
-        SELECT id, direction, from_email, to_email, body_text, body_html, is_read, received_at, created_at
+        SELECT id, direction, from_email, to_email, subject, body_text, body_html, is_read, received_at, created_at
         FROM email_messages
         WHERE thread_id = ${id}
         ORDER BY received_at ASC
@@ -33,31 +33,34 @@ export async function GET(
     }
 
     // Try to find linked AI processing results via contact email match
-    const aiThreads = await sql`
-      SELECT
-        mt.id, mt.thread_id, mt.intent, mt.processor_type, mt.status AS ai_status,
-        mt.quote_value, mt.confidence_score, mt.created_at AS ai_created_at,
-        c.name AS contact_name, co.business_name AS company_name
-      FROM message_threads mt
-      LEFT JOIN contacts c ON mt.contact_id = c.id
-      LEFT JOIN companies co ON mt.company_id = co.id
-      WHERE c.email ILIKE ${thread.participant_from}
-      ORDER BY mt.created_at DESC
-      LIMIT 5
-    `
+    let aiDetails: unknown[] = []
+    if (thread.participant_from) {
+      const aiThreads = await sql`
+        SELECT
+          mt.id, mt.thread_id, mt.intent, mt.processor_type, mt.status AS ai_status,
+          mt.quote_value, mt.confidence_score, mt.created_at AS ai_created_at,
+          c.name AS contact_name, co.business_name AS company_name
+        FROM message_threads mt
+        LEFT JOIN contacts c ON mt.contact_id = c.id
+        LEFT JOIN companies co ON mt.company_id = co.id
+        WHERE c.email ILIKE ${thread.participant_from}
+        ORDER BY mt.created_at DESC
+        LIMIT 5
+      `
 
-    // For each AI thread, grab the processed artifact for quote details
-    const aiDetails = await Promise.all(
-      (aiThreads as Array<Record<string, unknown>>).map(async (at) => {
-        const artifacts = await sql`
-          SELECT artifact_type, artifact_data, sequence_order, created_at
-          FROM message_artifacts
-          WHERE thread_id = ${at.id as string}
-          ORDER BY sequence_order ASC
-        `
-        return { ...at, artifacts }
-      })
-    )
+      // For each AI thread, grab the processed artifact for quote details
+      aiDetails = await Promise.all(
+        (aiThreads as Array<Record<string, unknown>>).map(async (at) => {
+          const artifacts = await sql`
+            SELECT artifact_type, artifact_data, sequence_order, created_at
+            FROM message_artifacts
+            WHERE thread_id = ${at.id as string}
+            ORDER BY sequence_order ASC
+          `
+          return { ...at, artifacts }
+        })
+      )
+    }
 
     return NextResponse.json({
       thread,

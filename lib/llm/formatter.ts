@@ -312,25 +312,108 @@ Operations Lead | FL Distributions
   }
 }
 
-export function textToHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+// ── HTML email renderer ────────────────────────────────────────────────────────
 
-  const lines = escaped.split('\n')
-  const htmlLines = lines.map(line => {
-    if (line.startsWith('─') || line.startsWith('═')) {
-      return `<hr style="border: none; border-top: 1px solid #E5E7EB; margin: 8px 0;">`
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function inlineMd(s: string): string {
+  return escHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+}
+
+function isSeparatorRow(line: string): boolean {
+  return /^\|[\s|:-]+\|$/.test(line.trim())
+}
+
+function renderMdTable(tableLines: string[]): string {
+  const dataLines = tableLines.filter(l => !isSeparatorRow(l))
+  if (dataLines.length === 0) return ''
+
+  const parseRow = (line: string): string[] =>
+    line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+  const [headerLine, ...bodyLines] = dataLines
+  const headerCells = parseRow(headerLine)
+
+  const thStyle = 'background:#1E3A5F;color:#ffffff;padding:10px 14px;text-align:left;font-size:13px;font-weight:600;border:1px solid #1E40AF;'
+  const headerHtml = `<tr>${headerCells.map(c => `<th style="${thStyle}">${inlineMd(c)}</th>`).join('')}</tr>`
+
+  const bodyHtml = bodyLines.map((row, i) => {
+    const cells = parseRow(row)
+    const bg = i % 2 === 0 ? '#F9FAFB' : '#FFFFFF'
+    const tdStyle = `padding:9px 14px;font-size:13px;color:#374151;border:1px solid #E5E7EB;background:${bg};`
+    return `<tr>${cells.map(c => `<td style="${tdStyle}">${inlineMd(c)}</td>`).join('')}</tr>`
+  }).join('')
+
+  return `<table style="width:100%;border-collapse:collapse;margin:14px 0;font-family:Arial,sans-serif;"><thead>${headerHtml}</thead><tbody>${bodyHtml}</tbody></table>`
+}
+
+export function textToHtml(markdown: string): string {
+  const lines = markdown.split('\n')
+  const parts: string[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Divider lines (─ ═)
+    if (/^[─═]{3,}$/.test(trimmed)) {
+      parts.push('<hr style="border:none;border-top:1px solid #E5E7EB;margin:10px 0;">')
+      i++
+      continue
     }
-    return line === '' ? '<br>' : `<p style="margin: 4px 0; font-family: monospace; font-size: 13px;">${line}</p>`
-  })
+
+    // Markdown table block — collect all consecutive pipe lines
+    if (trimmed.startsWith('|')) {
+      const tableLines: string[] = []
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i])
+        i++
+      }
+      parts.push(renderMdTable(tableLines))
+      continue
+    }
+
+    // Bullet list — collect consecutive bullets
+    if (/^[-*•]\s/.test(trimmed)) {
+      const bullets: string[] = []
+      while (i < lines.length && /^[-*•]\s/.test(lines[i].trim())) {
+        bullets.push(lines[i].trim().replace(/^[-*•]\s/, ''))
+        i++
+      }
+      const liStyle = 'margin:3px 0;color:#374151;font-size:14px;line-height:1.5;'
+      parts.push(`<ul style="margin:6px 0 10px 0;padding-left:22px;">${bullets.map(b => `<li style="${liStyle}">${inlineMd(b)}</li>`).join('')}</ul>`)
+      continue
+    }
+
+    // Bold section headings (standalone **text** line)
+    if (/^\*\*.+\*\*$/.test(trimmed)) {
+      parts.push(`<p style="margin:14px 0 4px 0;font-size:14px;font-weight:700;color:#111827;">${inlineMd(trimmed)}</p>`)
+      i++
+      continue
+    }
+
+    // Blank line
+    if (trimmed === '') {
+      parts.push('<div style="height:8px;"></div>')
+      i++
+      continue
+    }
+
+    // Regular paragraph
+    parts.push(`<p style="margin:4px 0;font-size:14px;color:#111827;line-height:1.6;">${inlineMd(trimmed)}</p>`)
+    i++
+  }
 
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
-${htmlLines.join('\n')}
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;padding:28px 24px;color:#111827;background:#ffffff;line-height:1.6;">
+${parts.join('\n')}
 </body>
 </html>`
 }
