@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react'
 import { useSession, signOut } from 'next-auth/react'
+import CrmPanel from '@/components/crm/CrmPanel'
 import { calculateDrayageQuote } from '@/lib/pricing/drayage'
 import { estimateDrayageForUnknownCity } from '@/lib/pricing/drayage-distance'
 import { calculateWarehouseQuote } from '@/lib/pricing/calculator'
@@ -25,6 +26,7 @@ type TabMode =
   | 'pricing-history'
   | 'customer'
   | 'team'
+  | 'crm'
 
 type QuoteBuilderSubTab = 'drayage' | 'transloading' | 'last-mile'
 
@@ -175,6 +177,7 @@ const TABS: { id: TabMode; label: string; minRole?: string }[] = [
   { id: 'ai-review', label: 'AI Quote Builder' },
   { id: 'quote-builder', label: 'Quote Simulator' },
   { id: 'search', label: 'Search Thread' },
+  { id: 'crm', label: 'CRM' },
   { id: 'pricing-logic', label: 'Rate Sheet' },
   { id: 'pricing-history', label: 'Change History', minRole: 'manager' },
   { id: 'customer', label: 'Business Settings', minRole: 'manager' },
@@ -3251,11 +3254,16 @@ export default function QuoteTool() {
     )
   }
 
+  function renderCrm() {
+    return <CrmPanel userName={session?.user?.name ?? ''} />
+  }
+
   const tabContent: Record<TabMode, () => React.ReactNode> = {
     inbox: renderInbox,
     'ai-review': renderAiReview,
     'quote-builder': renderQuoteBuilder,
     search: renderSearch,
+    crm: renderCrm,
     'pricing-logic': renderPricingLogic,
     'pricing-history': renderPricingHistory,
     customer: renderCustomer,
