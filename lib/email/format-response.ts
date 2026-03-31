@@ -24,8 +24,8 @@ export async function formatResponse(params: FormatResponseParams): Promise<Form
   const context = { tenantId, projectId, threadId }
   const formatted = await formatProcessorResult(payload, originalRequest, context)
 
-  // Store markdown artifact
-  const mdSeq = await getNextSequenceOrder(threadId)
+  // Store markdown artifact (get one base seq, HTML gets base+1)
+  const baseSeq = await getNextSequenceOrder(threadId)
   await addArtifactToThread({
     threadId,
     tenantId,
@@ -35,11 +35,10 @@ export async function formatResponse(params: FormatResponseParams): Promise<Form
       content: formatted.markdown,
       subject: formatted.subject,
     },
-    sequenceOrder: mdSeq,
+    sequenceOrder: baseSeq,
   })
 
   // Store HTML artifact
-  const htmlSeq = await getNextSequenceOrder(threadId)
   await addArtifactToThread({
     threadId,
     tenantId,
@@ -49,7 +48,7 @@ export async function formatResponse(params: FormatResponseParams): Promise<Form
       content: formatted.html,
       subject: formatted.subject,
     },
-    sequenceOrder: htmlSeq,
+    sequenceOrder: baseSeq + 1,
   })
 
   return {

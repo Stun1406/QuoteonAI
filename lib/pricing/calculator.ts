@@ -15,10 +15,14 @@ export function calculateWarehouseQuote(
       const count = container.containerCount || 1
 
       if (container.cargoPackaging === 'loose-cargo') {
-        const pieces = container.looseCargoCount || 0
+        const pieces = container.looseCargoCount ?? 0
         let containerRate: number
 
-        if (pieces <= 500) {
+        if (pieces === 0) {
+          // Piece count not specified — charge minimum rate and flag for confirmation
+          containerRate = TRANSLOADING_RATES.looseCargo.tier1.rate
+          warnings.push('Loose cargo piece count not specified — minimum rate applied. Please confirm total pieces.')
+        } else if (pieces <= 500) {
           containerRate = TRANSLOADING_RATES.looseCargo.tier1.rate
         } else if (pieces <= 1000) {
           containerRate = TRANSLOADING_RATES.looseCargo.tier2.rate
@@ -29,7 +33,7 @@ export function calculateWarehouseQuote(
         }
 
         lineItems.push({
-          description: `Transloading — Loose Cargo ${pieces > 0 ? pieces + ' pcs' : ''} (${containerLabel})`,
+          description: `Transloading — Loose Cargo${pieces > 0 ? ` ${pieces} pcs` : ' (qty TBC)'} (${containerLabel})`,
           quantity: count,
           unitPrice: containerRate,
           total: count * containerRate,

@@ -68,8 +68,8 @@ async function routeHybrid(
     const result = await routeSingleFlow(flow, preprocessResult, options)
     let total = 0
     if (result.responseData.type === 'drayage') total = result.responseData.quote?.subtotal ?? 0
-    else if (result.responseData.type === 'warehousing') total = result.responseData.result.total
-    else if (result.responseData.type === 'last-mile') total = result.responseData.result.total
+    else if (result.responseData.type === 'warehousing') total = result.responseData.result?.total ?? 0
+    else if (result.responseData.type === 'last-mile') total = result.responseData.result?.total ?? 0
     flowResults.push({ flow, result, total })
   }
 
