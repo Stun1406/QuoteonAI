@@ -237,27 +237,6 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
         <StatCard label="In Transit" value={inTransit} sub="Active shipments" color="text-blue-600" />
       </div>
 
-      {/* Recent Quotes */}
-      <div>
-        <SectionHeader title="Recent Quotes" count={recent.length} />
-        {recent.length === 0 ? (
-          <EmptyState title="No quotes yet" sub="Quotes will appear here as emails are processed." />
-        ) : (
-          <Table headers={['Customer', 'Company', 'Type', 'Value', 'Status', 'Date']}>
-            {recent.map(q => (
-              <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                <TD>{q.contact_name ?? '—'}</TD>
-                <TD className="font-medium">{q.company_name ?? '—'}</TD>
-                <TD>{serviceLabel(q.processor_type)}</TD>
-                <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
-                <TD><Badge label={q.status} /></TD>
-                <TD className="text-[var(--color-text-3)]">{fmtDate(q.created_at)}</TD>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </div>
-
       {/* Analytics overview row */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl p-5">
@@ -321,6 +300,27 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
           </div>
         </div>
       </div>
+
+      {/* Recent Quotes */}
+      <div>
+        <SectionHeader title="Recent Quotes" count={recent.length} />
+        {recent.length === 0 ? (
+          <EmptyState title="No quotes yet" sub="Quotes will appear here as emails are processed." />
+        ) : (
+          <Table headers={['Customer', 'Company', 'Type', 'Value', 'Status', 'Date']}>
+            {recent.map(q => (
+              <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
+                <TD>{q.contact_name ?? '—'}</TD>
+                <TD className="font-medium">{q.company_name ?? '—'}</TD>
+                <TD>{serviceLabel(q.processor_type)}</TD>
+                <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
+                <TD><Badge label={q.status} /></TD>
+                <TD className="text-[var(--color-text-3)]">{fmtDate(q.created_at)}</TD>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </div>
     </div>
   )
 }
@@ -338,6 +338,75 @@ const SAMPLE_FLD: Account = {
   quote_count: 12,
   total_value: 48750,
   created_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+}
+
+// ── Seed data (shown when API returns empty / before real data loads) ──────────
+
+function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString() }
+
+const SEED_ACCOUNTS: Account[] = [
+  { id: 'acc-1', business_name: 'Pacific Imports LLC', email_domain: 'pacificimports.com', industry_type: 'Import & Distribution', category: 'gold', region: 'Los Angeles', credit_terms: 'Net 30', account_status: 'active', contact_count: 3, quote_count: 8, total_value: 32400, created_at: daysAgo(120) },
+  { id: 'acc-2', business_name: 'Western LogCo', email_domain: 'westernlogco.com', industry_type: 'Third-Party Logistics', category: 'gold', region: 'Long Beach', credit_terms: 'Net 15', account_status: 'active', contact_count: 2, quote_count: 6, total_value: 27800, created_at: daysAgo(95) },
+  { id: 'acc-3', business_name: 'Sunrise Distribution', email_domain: 'sunrisedistrib.com', industry_type: 'Warehousing & Distribution', category: 'silver', region: 'Ontario', credit_terms: 'Net 30', account_status: 'active', contact_count: 2, quote_count: 5, total_value: 14600, created_at: daysAgo(75) },
+  { id: 'acc-4', business_name: 'SoCal Freight Partners', email_domain: 'socalfreight.com', industry_type: 'Freight Brokerage', category: 'silver', region: 'Carson', credit_terms: 'Net 15', account_status: 'active', contact_count: 1, quote_count: 4, total_value: 9850, created_at: daysAgo(60) },
+  { id: 'acc-5', business_name: 'Empire State Logistics', email_domain: 'empirelogistics.com', industry_type: 'Intermodal', category: 'bronze', region: 'Compton', credit_terms: 'Net 45', account_status: 'active', contact_count: 1, quote_count: 3, total_value: 5200, created_at: daysAgo(45) },
+  { id: 'acc-6', business_name: 'Harbor Trade Group', email_domain: 'harbortradegroup.com', industry_type: 'Import & Distribution', category: 'standard', region: 'Wilmington', credit_terms: 'COD', account_status: 'active', contact_count: 1, quote_count: 2, total_value: 2900, created_at: daysAgo(30) },
+]
+
+const SEED_QUOTES: Quote[] = [
+  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100,  confidence_score: 0.97, created_at: daysAgo(3),  contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution',  industry_type: 'Freight & Logistics' },
+  { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450,  confidence_score: 0.95, created_at: daysAgo(5),  contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
+  { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200,  confidence_score: 0.91, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
+  { id: 'q-4',  processor_type: 'drayage',    status: 'won',         quote_value: 980,   confidence_score: 0.98, created_at: daysAgo(8),  contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',   industry_type: 'Warehousing & Distribution' },
+  { id: 'q-5',  processor_type: 'last-mile',  status: 'in-progress', quote_value: 560,   confidence_score: 0.88, created_at: daysAgo(10), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners', industry_type: 'Freight Brokerage' },
+  { id: 'q-6',  processor_type: 'drayage',    status: 'won',         quote_value: 1750,  confidence_score: 0.96, created_at: daysAgo(12), contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution',  industry_type: 'Freight & Logistics' },
+  { id: 'q-7',  processor_type: 'warehousing',status: 'won',         quote_value: 4800,  confidence_score: 0.93, created_at: daysAgo(14), contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
+  { id: 'q-8',  processor_type: 'drayage',    status: 'won',         quote_value: 1300,  confidence_score: 0.94, created_at: daysAgo(16), contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
+  { id: 'q-9',  processor_type: 'hybrid',     status: 'quoted',      quote_value: 5400,  confidence_score: 0.87, created_at: daysAgo(18), contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',   industry_type: 'Warehousing & Distribution' },
+  { id: 'q-10', processor_type: 'drayage',    status: 'won',         quote_value: 890,   confidence_score: 0.99, created_at: daysAgo(20), contact_name: 'Tony Reyes',      contact_email: 'tony@empirelogistics.com',  company_name: 'Empire State Logistics', industry_type: 'Intermodal' },
+  { id: 'q-11', processor_type: 'last-mile',  status: 'won',         quote_value: 420,   confidence_score: 0.92, created_at: daysAgo(22), contact_name: 'Lisa Wang',       contact_email: 'lisa@harbortradegroup.com', company_name: 'Harbor Trade Group',     industry_type: 'Import & Distribution' },
+  { id: 'q-12', processor_type: 'drayage',    status: 'lost',        quote_value: 2650,  confidence_score: 0.72, created_at: daysAgo(25), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners', industry_type: 'Freight Brokerage' },
+]
+
+const SEED_CARRIERS: Carrier[] = [
+  { id: 'car-1', company_name: 'SoCal Dray Express',       mc_number: 'MC-482910', dot_number: 'DOT-1234567', contact_name: 'Ray Morales',  contact_email: 'ray@socaldray.com',     contact_phone: '(310) 555-0142', insurance_status: 'active', insurance_expiry: daysAgo(-180), performance_score: 9.2, status: 'active' },
+  { id: 'car-2', company_name: 'Inland Empire Transport',  mc_number: 'MC-395821', dot_number: 'DOT-2345678', contact_name: 'Chris Vega',   contact_email: 'chris@ietransport.com', contact_phone: '(909) 555-0217', insurance_status: 'active', insurance_expiry: daysAgo(-210), performance_score: 8.7, status: 'active' },
+  { id: 'car-3', company_name: 'Pacific Gateway Logistics',mc_number: 'MC-512047', dot_number: 'DOT-3456789', contact_name: 'Amy Tran',     contact_email: 'amy@pacgwl.com',       contact_phone: '(562) 555-0384', insurance_status: 'active', insurance_expiry: daysAgo(-90),  performance_score: 7.5, status: 'active' },
+  { id: 'car-4', company_name: 'Desert Run Carriers',      mc_number: 'MC-288439', dot_number: 'DOT-4567890', contact_name: 'Sam Ortiz',    contact_email: 'sam@desertrun.com',    contact_phone: '(760) 555-0093', insurance_status: 'active', insurance_expiry: daysAgo(-60),  performance_score: 6.8, status: 'active' },
+  { id: 'car-5', company_name: 'Bay Area Freight Co',      mc_number: 'MC-601234', dot_number: 'DOT-5678901', contact_name: 'Janet Lee',    contact_email: 'janet@bafreight.com',  contact_phone: '(415) 555-0276', insurance_status: 'active', insurance_expiry: daysAgo(-300), performance_score: 9.5, status: 'active' },
+  { id: 'car-6', company_name: 'Harbor Intermodal Inc',    mc_number: 'MC-349017', dot_number: 'DOT-6789012', contact_name: 'Tom Blake',    contact_email: 'tom@harborimi.com',    contact_phone: '(310) 555-0451', insurance_status: 'expired', insurance_expiry: daysAgo(15),   performance_score: 5.4, status: 'inactive' },
+]
+
+const SEED_SHIPMENTS: Shipment[] = [
+  { id: 'sh-1',  bol_number: 'BOL-2024-0181', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(5),  delivery_date: daysAgo(4),  actual_pickup: daysAgo(5),  actual_delivery: daysAgo(4),  status: 'delivered',  quote_value: 2100 },
+  { id: 'sh-2',  bol_number: 'BOL-2024-0182', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Chino, CA',          equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(3),  delivery_date: daysAgo(2),  actual_pickup: daysAgo(3),  actual_delivery: null,        status: 'in-transit', quote_value: 1450 },
+  { id: 'sh-3',  bol_number: 'BOL-2024-0183', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Pacific Gateway Logistics', origin: 'Los Angeles, CA',  destination: 'Fontana, CA',        equipment_type: '53ft Trailer',   service_type: 'Transloading', pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 3200 },
+  { id: 'sh-4',  bol_number: 'BOL-2024-0184', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'SoCal Dray Express',       origin: 'San Pedro, CA',    destination: 'Rancho Cucamonga, CA',equipment_type: '20ft Container', service_type: 'Drayage',    pickup_date: daysAgo(7),  delivery_date: daysAgo(6),  actual_pickup: daysAgo(7),  actual_delivery: daysAgo(6),  status: 'delivered',  quote_value: 980  },
+  { id: 'sh-5',  bol_number: 'BOL-2024-0185', customer_name: 'James Kim',       customer_company: 'SoCal Freight Partners', carrier_name: 'Desert Run Carriers',      origin: 'Carson, CA',       destination: 'Riverside, CA',      equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'pending',    quote_value: 560  },
+  { id: 'sh-6',  bol_number: 'BOL-2024-0179', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'Colton, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(12), delivery_date: daysAgo(11), actual_pickup: daysAgo(12), actual_delivery: daysAgo(11), status: 'delivered',  quote_value: 1750 },
+  { id: 'sh-7',  bol_number: 'BOL-2024-0177', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Transloading', pickup_date: daysAgo(14), delivery_date: daysAgo(13), actual_pickup: daysAgo(14), actual_delivery: daysAgo(13), status: 'delivered',  quote_value: 4800 },
+  { id: 'sh-8',  bol_number: 'BOL-2024-0175', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Irvine, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(16), delivery_date: daysAgo(15), actual_pickup: daysAgo(16), actual_delivery: daysAgo(15), status: 'delivered',  quote_value: 1300 },
+  { id: 'sh-9',  bol_number: 'BOL-2024-0172', customer_name: 'Tony Reyes',      customer_company: 'Empire State Logistics', carrier_name: 'Pacific Gateway Logistics', origin: 'Wilmington, CA',   destination: 'Corona, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(20), delivery_date: daysAgo(19), actual_pickup: daysAgo(20), actual_delivery: daysAgo(19), status: 'delivered',  quote_value: 890  },
+  { id: 'sh-10', bol_number: 'BOL-2024-0170', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'San Bernardino, CA', equipment_type: '53ft Trailer',   service_type: 'Drayage',    pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 1800 },
+  { id: 'sh-11', bol_number: 'BOL-2024-0168', customer_name: 'Lisa Wang',       customer_company: 'Harbor Trade Group',     carrier_name: 'Desert Run Carriers',      origin: 'Harbor City, CA',  destination: 'Torrance, CA',       equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(22), delivery_date: daysAgo(21), actual_pickup: daysAgo(22), actual_delivery: daysAgo(21), status: 'delivered',  quote_value: 420  },
+  { id: 'sh-12', bol_number: 'BOL-2024-0165', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Anaheim, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 1350 },
+]
+
+const SEED_RECENT_QUOTES: RecentQuote[] = [
+  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100, created_at: daysAgo(3),  contact_name: 'Maria Santos',    company_name: 'FLD — FL Distribution'  },
+  { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450, created_at: daysAgo(5),  contact_name: 'Mike Chen',       company_name: 'Pacific Imports LLC'    },
+  { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', company_name: 'Western LogCo'          },
+  { id: 'q-4',  processor_type: 'drayage',    status: 'won',         quote_value: 980,  created_at: daysAgo(8),  contact_name: 'David Park',      company_name: 'Sunrise Distribution'   },
+  { id: 'q-5',  processor_type: 'last-mile',  status: 'in-progress', quote_value: 560,  created_at: daysAgo(10), contact_name: 'James Kim',       company_name: 'SoCal Freight Partners' },
+]
+
+const SEED_STATS: DashboardStats = {
+  totalAccounts: 7,
+  totalQuotes: 38,
+  winRate: 96.8,
+  avgQuoteValue: '2847',
+  totalShipments: 32,
+  inTransit: 6,
 }
 
 function Customers({ accounts, loading }: { accounts: Account[]; loading: boolean }) {
@@ -744,7 +813,13 @@ interface CrmPanelProps {
 
 export default function CrmPanel({ userName = '' }: CrmPanelProps) {
   const [subTab, setSubTab] = useState<CrmSubTab>('dashboard')
-  const [data, setData] = useState<CrmData>({ dashboard: null, accounts: [], quotes: [], carriers: [], shipments: [] })
+  const [data, setData] = useState<CrmData>({
+    dashboard: { stats: SEED_STATS, recentQuotes: SEED_RECENT_QUOTES },
+    accounts: SEED_ACCOUNTS,
+    quotes: SEED_QUOTES,
+    carriers: SEED_CARRIERS,
+    shipments: SEED_SHIPMENTS,
+  })
   const [loading, setLoading] = useState<Record<CrmSubTab, boolean>>({
     dashboard: false, customers: false, quotes: false, carriers: false, shipments: false, analytics: false,
   })
@@ -759,20 +834,33 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
       if (!res.ok) throw new Error('Failed')
       const json = await res.json()
 
-      if (section === 'dashboard') {
-        setData(prev => ({ ...prev, dashboard: { stats: json.stats, recentQuotes: json.recentQuotes } }))
+      // Only replace seed data if the API returns real content
+      if (section === 'dashboard' && json.stats) {
+        const hasReal = (json.recentQuotes ?? []).length > 0
+        setData(prev => ({
+          ...prev,
+          dashboard: {
+            stats: hasReal ? json.stats : SEED_STATS,
+            recentQuotes: hasReal ? json.recentQuotes : SEED_RECENT_QUOTES,
+          },
+        }))
       } else if (section === 'customers') {
-        setData(prev => ({ ...prev, accounts: json.accounts ?? [] }))
+        const real = json.accounts ?? []
+        if (real.length > 0) setData(prev => ({ ...prev, accounts: real }))
       } else if (section === 'quotes') {
-        setData(prev => ({ ...prev, quotes: json.quotes ?? [] }))
+        const real = json.quotes ?? []
+        if (real.length > 0) setData(prev => ({ ...prev, quotes: real }))
       } else if (section === 'carriers') {
-        setData(prev => ({ ...prev, carriers: json.carriers ?? [] }))
+        const real = json.carriers ?? []
+        if (real.length > 0) setData(prev => ({ ...prev, carriers: real }))
       } else if (section === 'shipments') {
-        setData(prev => ({ ...prev, shipments: json.shipments ?? [] }))
+        const real = json.shipments ?? []
+        if (real.length > 0) setData(prev => ({ ...prev, shipments: real }))
       }
       loaded.current.add(section)
     } catch {
-      // silently fail — empty state shown
+      // silently fail — seed data stays visible
+      loaded.current.add(section)
     } finally {
       setLoading(prev => ({ ...prev, [section]: false }))
     }

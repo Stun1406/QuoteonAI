@@ -177,11 +177,11 @@ const TABS: { id: TabMode; label: string; minRole?: string }[] = [
   { id: 'ai-review', label: 'AI Quote Builder' },
   { id: 'quote-builder', label: 'Quote Simulator' },
   { id: 'search', label: 'Search Thread' },
-  { id: 'crm', label: 'CRM' },
   { id: 'pricing-logic', label: 'Rate Sheet' },
   { id: 'pricing-history', label: 'Change History', minRole: 'manager' },
   { id: 'customer', label: 'Business Settings', minRole: 'manager' },
   { id: 'team', label: 'Organization', minRole: 'admin' },
+  { id: 'crm', label: 'CRM' },
 ]
 
 function roleLevel(role?: string): number {
@@ -982,6 +982,28 @@ export default function QuoteTool() {
         setReplyError(prev => ({ ...prev, [item.id]: err instanceof Error ? err.message : 'Send failed' }))
         return
       }
+    } else if (!item.emailThreadId && item.from && item.from !== 'anonymous@example.com') {
+      // Compose-originated email — send via Resend
+      try {
+        const res = await fetch('/api/inbox/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: item.from,
+            subject: item.subject ?? 'Your Quote',
+            text: draft,
+            html: simpleMarkdownToHtml(draft),
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json() as { error?: string }
+          throw new Error(err.error ?? 'Send failed')
+        }
+      } catch (err) {
+        setSendingReply(null)
+        setReplyError(prev => ({ ...prev, [item.id]: err instanceof Error ? err.message : 'Send failed' }))
+        return
+      }
     }
 
     // Update local state regardless
@@ -1564,11 +1586,11 @@ export default function QuoteTool() {
                 >
                   {sendingReply === item.id
                     ? 'Sending…'
-                    : item.emailThreadId
+                    : (item.emailThreadId || (item.from && item.from !== 'anonymous@example.com'))
                     ? 'Confirm & Send Email'
                     : 'Confirm & Send to Inbox'}
                 </Btn>
-                {item.emailThreadId && (
+                {(item.emailThreadId || (item.from && item.from !== 'anonymous@example.com')) && (
                   <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
                     Will send via Resend to {item.from}
                   </span>
@@ -2315,7 +2337,7 @@ export default function QuoteTool() {
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-3)] uppercase">Item</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-3)] uppercase">Category</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-[var(--color-text-3)] uppercase">Value</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-[var(--color-text-3)] uppercase">Rate</th>
                 </tr>
               </thead>
               <tbody>

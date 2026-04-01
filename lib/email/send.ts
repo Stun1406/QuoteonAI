@@ -11,7 +11,7 @@ export interface SendEmailParams {
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string }> {
-  const from = process.env.FROM_EMAIL ?? 'quotes@fldistribution.com'
+  const from = process.env.FROM_EMAIL ?? 'quote-agent@quotify.cc'
 
   const result = await resend.emails.send({
     from,
