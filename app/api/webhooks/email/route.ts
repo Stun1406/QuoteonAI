@@ -61,18 +61,23 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await parsePayload(req)
 
-    // Verify auth: accept either API key or HMAC signature
+    // Verify auth: accept API key, HMAC signature, or WEBHOOK_SECRET used directly as API key
     const apiKey = req.headers.get('x-api-key') ?? ''
     const expectedApiKey = process.env.EMAIL_WORKER_API_KEY ?? ''
     const signature = req.headers.get('x-webhook-signature') ?? ''
     const secret = process.env.WEBHOOK_SECRET ?? ''
 
+    // Three valid auth paths:
+    // 1. x-api-key matches EMAIL_WORKER_API_KEY
+    // 2. x-api-key matches WEBHOOK_SECRET directly (simplest Cloudflare worker setup)
+    // 3. x-webhook-signature is a valid HMAC-SHA256 of form fields using WEBHOOK_SECRET
     const apiKeyValid = expectedApiKey !== '' && apiKey === expectedApiKey
-    const hmacValid = secret !== '' && verifyWebhookSignature(payload.formFields, signature, secret)
+    const secretAsKeyValid = secret !== '' && apiKey === secret
+    const hmacValid = secret !== '' && signature !== '' && verifyWebhookSignature(payload.formFields, signature, secret)
     const authConfigured = expectedApiKey !== '' || secret !== ''
 
     if (authConfigured) {
-      if (!apiKeyValid && !hmacValid) {
+      if (!apiKeyValid && !secretAsKeyValid && !hmacValid) {
         console.warn('[webhook/email] Auth failed — apiKey present:', !!apiKey, '| sig present:', !!signature)
         await logEmailFailure({
           stage: 'webhook-auth',
