@@ -85,7 +85,7 @@ function IconArrow() {
 }
 function IconArrowRight() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-7 h-7">
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="13 6 19 12 13 18" />
     </svg>
@@ -93,7 +93,7 @@ function IconArrowRight() {
 }
 function IconArrowDown() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-7 h-7">
       <line x1="12" y1="5" x2="12" y2="19" />
       <polyline points="6 13 12 19 18 13" />
     </svg>
@@ -167,7 +167,7 @@ const FEATURES = [
     title: 'Automation Engine',
     color: 'text-yellow-400',
     bg: 'bg-yellow-500/10 border-yellow-500/20',
-    items: ['End-to-end quote automation', '24×7 instant response capability', 'Automated follow-ups & revisions'],
+    items: ['End-to-end quote automation', '24/7 instant response capability', 'Automated follow-ups & revisions'],
   },
   {
     icon: <IconLink />,
@@ -259,7 +259,7 @@ export default function LandingPage() {
               href="mailto:hello@lithiumq.com"
               className="hidden sm:inline-flex text-sm text-slate-300 hover:text-white transition px-4 py-2"
             >
-              Book a Demo
+              Request a Demo
             </a>
             <Link
               href="/login"
@@ -298,7 +298,7 @@ export default function LandingPage() {
             {[
               'From Inquiry to Quote in Seconds',
               'Better Margins. Smarter Decisions.',
-              '24×7 AI-Powered Response',
+              '24/7 AI-Powered Response',
             ].map(tag => (
               <span
                 key={tag}
@@ -321,7 +321,7 @@ export default function LandingPage() {
               href="mailto:hello@lithiumq.com"
               className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium rounded-xl transition"
             >
-              Book a Demo
+              Request a Demo
             </a>
           </div>
         </div>
@@ -377,12 +377,11 @@ export default function LandingPage() {
               {WORKFLOW_STEPS.slice(0, 3).map((step, i) => (
                 <div key={step.title} className="flex items-stretch gap-2 flex-1">
                   <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
-                    <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
                     <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
                     <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                   </div>
                   {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-500/60">
+                    <div className="flex items-center flex-shrink-0 text-blue-400/80">
                       <IconArrowRight />
                     </div>
                   )}
@@ -391,7 +390,7 @@ export default function LandingPage() {
             </div>
 
             <div className="flex justify-end pr-2">
-              <div className="text-blue-500/60">
+              <div className="text-blue-400/80">
                 <IconArrowDown />
               </div>
             </div>
@@ -400,12 +399,11 @@ export default function LandingPage() {
               {WORKFLOW_STEPS.slice(3).map((step, i) => (
                 <div key={step.title} className="flex items-stretch gap-2 flex-1 flex-row-reverse">
                   <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
-                    <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
                     <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
                     <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                   </div>
                   {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-500/60 rotate-180">
+                    <div className="flex items-center flex-shrink-0 text-blue-400/80 rotate-180">
                       <IconArrowRight />
                     </div>
                   )}
@@ -419,12 +417,11 @@ export default function LandingPage() {
             {WORKFLOW_STEPS.map((step, i) => (
               <div key={step.title} className="w-full flex flex-col items-center gap-2">
                 <div className="w-full bg-white/[0.04] rounded-2xl border border-white/8 p-5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${step.dot} mb-3`} />
                   <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
                   <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
                 </div>
                 {i < WORKFLOW_STEPS.length - 1 && (
-                  <div className="text-blue-500/60">
+                  <div className="text-blue-400/80">
                     <IconArrowDown />
                   </div>
                 )}
@@ -459,14 +456,14 @@ export default function LandingPage() {
             <div className="grid lg:grid-cols-2 gap-8 items-start">
               <div>
                 <p className="text-sm font-medium text-slate-400 mb-4">Purpose-built for logistics providers including:</p>
-                <div className="grid grid-cols-2 gap-3">
+                <ul className="flex flex-col gap-2.5">
                   {OPERATORS.map(op => (
-                    <div key={op.label} className="flex items-center gap-3 bg-white/[0.05] rounded-xl border border-white/8 px-4 py-3.5 hover:bg-white/[0.08] transition">
-                      <span className="text-xl leading-none">{op.icon}</span>
-                      <span className="text-sm font-medium text-slate-300 leading-snug">{op.label}</span>
-                    </div>
+                    <li key={op.label} className="flex items-center gap-3 bg-blue-500/10 rounded-xl border border-blue-500/25 px-4 py-3.5 hover:bg-blue-500/15 transition">
+                      <span className="text-lg leading-none">{op.icon}</span>
+                      <span className="text-sm font-semibold text-blue-200 leading-snug">{op.label}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -560,27 +557,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Why QuotionAI ── */}
-      <section className="py-24 border-t border-white/5">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <p className="text-blue-400 text-sm font-semibold uppercase tracking-widest mb-3">Why QuotionAI</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5">Built Different, By Design</h2>
-          <p className="text-slate-400 max-w-xl mx-auto mb-12">
-            Not just another quoting tool — a fully autonomous AI agent purpose-built for the complexity of modern sales.
-          </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
-            {WHY_ITEMS.map((item, i) => (
-              <div key={i} className="flex items-start gap-3 bg-white/[0.04] rounded-xl border border-white/8 p-4 hover:bg-white/[0.07] transition">
-                <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white flex-shrink-0">
-                  <IconCheck />
-                </span>
-                <span className="text-sm text-slate-300 font-medium leading-snug">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── CTA ── */}
       <section
         className="py-24 relative overflow-hidden border-t border-white/5"
@@ -606,7 +582,7 @@ export default function LandingPage() {
               href="mailto:hello@lithiumq.com"
               className="inline-flex items-center gap-2 px-8 py-4 bg-blue-500/20 border border-white/20 text-white font-medium rounded-xl hover:bg-blue-500/30 transition"
             >
-              Book a Demo
+              Request a Demo
             </a>
           </div>
         </div>

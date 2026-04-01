@@ -677,7 +677,7 @@ export default function QuoteTool() {
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
   const [checkedEmails, setCheckedEmails] = useState<Set<string>>(new Set())
   const [composeFrom, setComposeFrom] = useState('')
-  const [composeTo, setComposeTo] = useState('quotes@fldistributions.com')
+  const [composeTo, setComposeTo] = useState('quote-agent@quotify.cc')
   const [composeSubject, setComposeSubject] = useState('')
   const [composeBody, setComposeBody] = useState('')
   const [inboxLoading, setInboxLoading] = useState(false)
