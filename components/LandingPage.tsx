@@ -371,54 +371,13 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Desktop: two rows of 3 with arrows */}
-          <div className="hidden lg:block space-y-4">
-            <div className="flex items-stretch gap-2">
-              {WORKFLOW_STEPS.slice(0, 3).map((step, i) => (
-                <div key={step.title} className="flex items-stretch gap-2 flex-1">
-                  <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
-                    <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
-                  </div>
-                  {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-400/80">
-                      <IconArrowRight />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-end pr-2">
-              <div className="text-blue-400/80">
-                <IconArrowDown />
-              </div>
-            </div>
-
-            <div className="flex items-stretch gap-2 flex-row-reverse">
-              {WORKFLOW_STEPS.slice(3).map((step, i) => (
-                <div key={step.title} className="flex items-stretch gap-2 flex-1 flex-row-reverse">
-                  <div className="flex-1 bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
-                    <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
-                  </div>
-                  {i < 2 && (
-                    <div className="flex items-center flex-shrink-0 text-blue-400/80 rotate-180">
-                      <IconArrowRight />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Mobile: vertical with down arrows */}
-          <div className="lg:hidden flex flex-col items-center gap-2">
+          {/* Vertical stack — all steps same width, one below the other */}
+          <div className="flex flex-col items-center gap-2 max-w-2xl mx-auto w-full">
             {WORKFLOW_STEPS.map((step, i) => (
               <div key={step.title} className="w-full flex flex-col items-center gap-2">
-                <div className="w-full bg-white/[0.04] rounded-2xl border border-white/8 p-5">
-                  <h3 className="font-semibold text-white text-sm mb-2">{step.title}</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
+                <div className="w-full bg-white/[0.04] rounded-2xl border border-white/8 p-5 hover:bg-white/[0.07] hover:-translate-y-0.5 transition-all duration-200">
+                  <h3 className="font-semibold text-white text-sm mb-2 text-center">{step.title}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed text-center">{step.desc}</p>
                 </div>
                 {i < WORKFLOW_STEPS.length - 1 && (
                   <div className="text-blue-400/80">

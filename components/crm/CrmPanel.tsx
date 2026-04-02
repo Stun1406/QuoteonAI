@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type CrmSubTab = 'dashboard' | 'customers' | 'quotes' | 'carriers' | 'shipments' | 'analytics'
+type CrmSubTab = 'dashboard' | 'customers' | 'quotes' | 'carriers' | 'shipments' | 'analytics' | 'pricing'
 
 interface DashboardStats {
   totalAccounts: number
@@ -125,6 +125,7 @@ const STATUS_STYLE: Record<string, string> = {
   quoted: 'bg-indigo-50 text-indigo-700',
   won: 'bg-green-50 text-green-700',
   lost: 'bg-red-50 text-red-700',
+  closed: 'bg-slate-200 text-slate-700',
   pending: 'bg-slate-100 text-slate-600',
   'in-transit': 'bg-blue-50 text-blue-700',
   delivered: 'bg-green-50 text-green-700',
@@ -350,7 +351,7 @@ const SEED_ACCOUNTS: Account[] = [
   { id: 'acc-3', business_name: 'Sunrise Distribution', email_domain: 'sunrisedistrib.com', industry_type: 'Warehousing & Distribution', category: 'silver', region: 'Ontario', credit_terms: 'Net 30', account_status: 'active', contact_count: 2, quote_count: 5, total_value: 14600, created_at: daysAgo(75) },
   { id: 'acc-4', business_name: 'SoCal Freight Partners', email_domain: 'socalfreight.com', industry_type: 'Freight Brokerage', category: 'silver', region: 'Carson', credit_terms: 'Net 15', account_status: 'active', contact_count: 1, quote_count: 4, total_value: 9850, created_at: daysAgo(60) },
   { id: 'acc-5', business_name: 'Empire State Logistics', email_domain: 'empirelogistics.com', industry_type: 'Intermodal', category: 'bronze', region: 'Compton', credit_terms: 'Net 45', account_status: 'active', contact_count: 1, quote_count: 3, total_value: 5200, created_at: daysAgo(45) },
-  { id: 'acc-6', business_name: 'Harbor Trade Group', email_domain: 'harbortradegroup.com', industry_type: 'Import & Distribution', category: 'standard', region: 'Wilmington', credit_terms: 'COD', account_status: 'active', contact_count: 1, quote_count: 2, total_value: 2900, created_at: daysAgo(30) },
+  { id: 'acc-6', business_name: 'Harbor Trade Group', email_domain: 'harbortradegroup.com', industry_type: 'Import & Distribution', category: 'standard', region: 'Wilmington', credit_terms: 'Net 30', account_status: 'active', contact_count: 1, quote_count: 2, total_value: 2900, created_at: daysAgo(30) },
 ]
 
 const SEED_QUOTES: Quote[] = [
@@ -358,7 +359,7 @@ const SEED_QUOTES: Quote[] = [
   { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450,  confidence_score: 0.95, created_at: daysAgo(5),  contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
   { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200,  confidence_score: 0.91, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
   { id: 'q-4',  processor_type: 'drayage',    status: 'won',         quote_value: 980,   confidence_score: 0.98, created_at: daysAgo(8),  contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',   industry_type: 'Warehousing & Distribution' },
-  { id: 'q-5',  processor_type: 'last-mile',  status: 'in-progress', quote_value: 560,   confidence_score: 0.88, created_at: daysAgo(10), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners', industry_type: 'Freight Brokerage' },
+  { id: 'q-5',  processor_type: 'last-mile',  status: 'quoted',      quote_value: 560,   confidence_score: 0.88, created_at: daysAgo(10), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners', industry_type: 'Freight Brokerage' },
   { id: 'q-6',  processor_type: 'drayage',    status: 'won',         quote_value: 1750,  confidence_score: 0.96, created_at: daysAgo(12), contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution',  industry_type: 'Freight & Logistics' },
   { id: 'q-7',  processor_type: 'warehousing',status: 'won',         quote_value: 4800,  confidence_score: 0.93, created_at: daysAgo(14), contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
   { id: 'q-8',  processor_type: 'drayage',    status: 'won',         quote_value: 1300,  confidence_score: 0.94, created_at: daysAgo(16), contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
@@ -382,7 +383,7 @@ const SEED_SHIPMENTS: Shipment[] = [
   { id: 'sh-2',  bol_number: 'BOL-2024-0182', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Chino, CA',          equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(3),  delivery_date: daysAgo(2),  actual_pickup: daysAgo(3),  actual_delivery: null,        status: 'in-transit', quote_value: 1450 },
   { id: 'sh-3',  bol_number: 'BOL-2024-0183', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Pacific Gateway Logistics', origin: 'Los Angeles, CA',  destination: 'Fontana, CA',        equipment_type: '53ft Trailer',   service_type: 'Transloading', pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 3200 },
   { id: 'sh-4',  bol_number: 'BOL-2024-0184', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'SoCal Dray Express',       origin: 'San Pedro, CA',    destination: 'Rancho Cucamonga, CA',equipment_type: '20ft Container', service_type: 'Drayage',    pickup_date: daysAgo(7),  delivery_date: daysAgo(6),  actual_pickup: daysAgo(7),  actual_delivery: daysAgo(6),  status: 'delivered',  quote_value: 980  },
-  { id: 'sh-5',  bol_number: 'BOL-2024-0185', customer_name: 'James Kim',       customer_company: 'SoCal Freight Partners', carrier_name: 'Desert Run Carriers',      origin: 'Carson, CA',       destination: 'Riverside, CA',      equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'pending',    quote_value: 560  },
+  { id: 'sh-5',  bol_number: 'BOL-2024-0185', customer_name: 'James Kim',       customer_company: 'SoCal Freight Partners', carrier_name: 'Desert Run Carriers',      origin: 'Carson, CA',       destination: 'Riverside, CA',      equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 560  },
   { id: 'sh-6',  bol_number: 'BOL-2024-0179', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'Colton, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(12), delivery_date: daysAgo(11), actual_pickup: daysAgo(12), actual_delivery: daysAgo(11), status: 'delivered',  quote_value: 1750 },
   { id: 'sh-7',  bol_number: 'BOL-2024-0177', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Transloading', pickup_date: daysAgo(14), delivery_date: daysAgo(13), actual_pickup: daysAgo(14), actual_delivery: daysAgo(13), status: 'delivered',  quote_value: 4800 },
   { id: 'sh-8',  bol_number: 'BOL-2024-0175', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Irvine, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(16), delivery_date: daysAgo(15), actual_pickup: daysAgo(16), actual_delivery: daysAgo(15), status: 'delivered',  quote_value: 1300 },
@@ -396,8 +397,8 @@ const SEED_RECENT_QUOTES: RecentQuote[] = [
   { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100, created_at: daysAgo(3),  contact_name: 'Maria Santos',    company_name: 'FLD — FL Distribution'  },
   { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450, created_at: daysAgo(5),  contact_name: 'Mike Chen',       company_name: 'Pacific Imports LLC'    },
   { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', company_name: 'Western LogCo'          },
-  { id: 'q-4',  processor_type: 'drayage',    status: 'won',         quote_value: 980,  created_at: daysAgo(8),  contact_name: 'David Park',      company_name: 'Sunrise Distribution'   },
-  { id: 'q-5',  processor_type: 'last-mile',  status: 'in-progress', quote_value: 560,  created_at: daysAgo(10), contact_name: 'James Kim',       company_name: 'SoCal Freight Partners' },
+  { id: 'q-4',  processor_type: 'drayage',    status: 'closed',      quote_value: 980,  created_at: daysAgo(8),  contact_name: 'David Park',      company_name: 'Sunrise Distribution'   },
+  { id: 'q-5',  processor_type: 'last-mile',  status: 'closed',      quote_value: 560,  created_at: daysAgo(10), contact_name: 'James Kim',       company_name: 'SoCal Freight Partners' },
 ]
 
 const SEED_STATS: DashboardStats = {
@@ -453,7 +454,6 @@ function Customers({ accounts, loading }: { accounts: Account[]; loading: boolea
             <tr key={a.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD>
                 <div className="font-medium">{a.business_name}</div>
-                {a.email_domain && <div className="text-xs text-[var(--color-text-3)]">{a.email_domain}</div>}
               </TD>
               <TD>{a.industry_type ?? '—'}</TD>
               <TD>
@@ -508,8 +508,6 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none">
           <option value="all">All Statuses</option>
-          <option value="new">New</option>
-          <option value="in-progress">In Progress</option>
           <option value="quoted">Quoted</option>
           <option value="won">Won</option>
           <option value="lost">Lost</option>
@@ -521,7 +519,7 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
       ) : filtered.length === 0 ? (
         <EmptyState title="No quotes found" sub="Quotes are created automatically when quote emails are processed." />
       ) : (
-        <Table headers={['Contact', 'Company', 'Industry', 'Type', 'Value', 'Confidence', 'Status', 'Date']}>
+        <Table headers={['Contact', 'Company', 'Industry', 'Type', 'Value', 'Status', 'Date']}>
           {filtered.map(q => (
             <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD>
@@ -536,19 +534,6 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
                 </span>
               </TD>
               <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
-              <TD>
-                {q.confidence_score != null ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-[var(--color-bg-3)] rounded-full">
-                      <div
-                        className={`h-1.5 rounded-full ${q.confidence_score >= 0.8 ? 'bg-green-500' : q.confidence_score >= 0.5 ? 'bg-yellow-500' : 'bg-red-400'}`}
-                        style={{ width: `${q.confidence_score * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-[var(--color-text-3)]">{Math.round(q.confidence_score * 100)}%</span>
-                  </div>
-                ) : '—'}
-              </TD>
               <TD><Badge label={q.status} /></TD>
               <TD className="text-[var(--color-text-3)]">{fmtDate(q.created_at)}</TD>
             </tr>
@@ -640,7 +625,6 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
         />
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none">
           <option value="all">All Statuses</option>
-          <option value="pending">Pending</option>
           <option value="in-transit">In Transit</option>
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
@@ -673,6 +657,296 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
           ))}
         </Table>
       )}
+    </div>
+  )
+}
+
+// ── Pricing Intelligence ──────────────────────────────────────────────────────
+
+interface MarketLane {
+  id: string
+  origin: string
+  destination: string
+  service: 'Drayage' | 'Transloading' | 'Last Mile'
+  unit: string
+  marketLow: number
+  marketHigh: number
+  ourRate: number
+  trend: 'up' | 'down' | 'stable'
+  dataPoints: number
+  lastUpdated: string
+}
+
+interface RateCard {
+  service: string
+  subtitle: string
+  consensusRate: number
+  unit: string
+  variants: { label: string; rate: number }[]
+  region: string
+  updatedMonth: string
+}
+
+const MARKET_LANES: MarketLane[] = [
+  { id: 'l1',  origin: 'Port of LA',       destination: 'Inland Empire',      service: 'Drayage',     unit: '40ft container', marketLow: 1800, marketHigh: 2200, ourRate: 2050, trend: 'stable', dataPoints: 142, lastUpdated: 'Nov 2025' },
+  { id: 'l2',  origin: 'Port of LB',       destination: 'Ontario / Chino',    service: 'Drayage',     unit: '40ft container', marketLow: 1650, marketHigh: 2000, ourRate: 1900, trend: 'up',     dataPoints: 118, lastUpdated: 'Nov 2025' },
+  { id: 'l3',  origin: 'Port of LA',       destination: 'LA Basin (Local)',   service: 'Drayage',     unit: '40ft container', marketLow: 850,  marketHigh: 1200, ourRate: 980,  trend: 'stable', dataPoints: 203, lastUpdated: 'Nov 2025' },
+  { id: 'l4',  origin: 'Port of LA',       destination: 'Orange County',      service: 'Drayage',     unit: '40ft container', marketLow: 1100, marketHigh: 1500, ourRate: 1280, trend: 'down',   dataPoints: 97,  lastUpdated: 'Nov 2025' },
+  { id: 'l5',  origin: 'Port of LB',       destination: 'Riverside / Corona', service: 'Drayage',     unit: '40ft container', marketLow: 1900, marketHigh: 2400, ourRate: 2200, trend: 'up',     dataPoints: 85,  lastUpdated: 'Nov 2025' },
+  { id: 'l6',  origin: 'Port of LA',       destination: 'San Fernando Valley',service: 'Drayage',     unit: '40ft container', marketLow: 1300, marketHigh: 1750, ourRate: 1450, trend: 'stable', dataPoints: 76,  lastUpdated: 'Nov 2025' },
+  { id: 'l7',  origin: 'Wilmington / San Pedro', destination: 'Fontana',      service: 'Drayage',     unit: '40ft container', marketLow: 1700, marketHigh: 2100, ourRate: 1850, trend: 'stable', dataPoints: 64,  lastUpdated: 'Nov 2025' },
+  { id: 'l8',  origin: 'LA / LB Ports',   destination: 'Warehousing — Normal Pallet', service: 'Transloading', unit: 'pallet/month', marketLow: 21, marketHigh: 35, ourRate: 32, trend: 'stable', dataPoints: 89,  lastUpdated: 'Nov 2025' },
+  { id: 'l9',  origin: 'LA / LB Ports',   destination: 'Warehousing — Oversize Pallet', service: 'Transloading', unit: 'pallet/month', marketLow: 38, marketHigh: 52, ourRate: 42, trend: 'up',  dataPoints: 54,  lastUpdated: 'Nov 2025' },
+  { id: 'l10', origin: 'LA / LB Ports',   destination: 'Warehousing — Loose Cargo',  service: 'Transloading', unit: 'per container', marketLow: 150, marketHigh: 200, ourRate: 170, trend: 'stable', dataPoints: 41, lastUpdated: 'Nov 2025' },
+  { id: 'l11', origin: 'LA / LB Area',    destination: 'Local Delivery — Straight Truck', service: 'Last Mile', unit: 'per mile', marketLow: 2.80, marketHigh: 3.80, ourRate: 3.20, trend: 'down', dataPoints: 167, lastUpdated: 'Nov 2025' },
+  { id: 'l12', origin: 'LA / LB Area',    destination: 'Local Delivery — Box Truck', service: 'Last Mile', unit: 'per mile', marketLow: 2.20, marketHigh: 3.00, ourRate: 2.50, trend: 'stable', dataPoints: 129, lastUpdated: 'Nov 2025' },
+]
+
+const RATE_CARDS: RateCard[] = [
+  {
+    service: 'DRAYAGE',
+    subtitle: '40FT CONTAINER • SOCAL PORTS',
+    consensusRate: 1820,
+    unit: 'PER MOVE',
+    variants: [
+      { label: 'Local (< 30 mi)', rate: 1020 },
+      { label: 'Mid (30–60 mi)', rate: 1760 },
+      { label: 'Long (60+ mi)', rate: 2250 },
+    ],
+    region: 'LA / LONG BEACH',
+    updatedMonth: 'NOV 2025',
+  },
+  {
+    service: 'TRANSLOADING',
+    subtitle: 'PALLETIZED • 5 PORTS',
+    consensusRate: 28.50,
+    unit: 'PER PALLET / MONTH',
+    variants: [
+      { label: 'Normal', rate: 23.50 },
+      { label: 'Oversize', rate: 44.00 },
+    ],
+    region: 'SOUTHERN CALIFORNIA',
+    updatedMonth: 'NOV 2025',
+  },
+  {
+    service: 'LAST MILE',
+    subtitle: 'STRAIGHT TRUCK • LOCAL LANES',
+    consensusRate: 3.20,
+    unit: 'PER MILE',
+    variants: [
+      { label: 'Box Truck', rate: 2.60 },
+      { label: 'Straight Truck', rate: 3.20 },
+      { label: 'Semi / 53ft', rate: 4.10 },
+    ],
+    region: 'LA BASIN',
+    updatedMonth: 'NOV 2025',
+  },
+]
+
+interface RateInsight {
+  type: 'opportunity' | 'warning' | 'info'
+  headline: string
+  detail: string
+  action: string
+}
+
+const RATE_INSIGHTS: RateInsight[] = [
+  { type: 'opportunity', headline: 'OC Drayage: room to increase', detail: 'Your Port of LA → Orange County rate ($1,280) sits 12% below the $1,100–$1,500 market range midpoint. Capacity on this lane is tight — market is trending down, suggesting competitors are winning bids. Consider a modest 5–8% increase.', action: 'Adjust rate to ~$1,360' },
+  { type: 'warning',     headline: 'Riverside lane tracking above median', detail: 'Port of LB → Riverside rate ($2,200) is near the top of the $1,900–$2,400 market range and trend is upward. Monitor closely — being top-priced on a rising-cost lane may create win-rate pressure.', action: 'Hold rate, review monthly' },
+  { type: 'opportunity', headline: 'Last-mile: below market on straight truck', detail: 'Your per-mile rate ($3.20) matches the market median, but the market is showing a downward trend. Locking in volume deals now at current rates before market softening could protect revenue.', action: 'Offer volume incentives now' },
+  { type: 'info',        headline: 'Transloading storage: well-positioned', detail: 'Your normal pallet rate ($32/pallet/month) falls within the upper half of the $21–$35 market range, reflecting warehouse quality and location premium. No action needed.', action: 'Maintain current rates' },
+]
+
+function positionInRange(our: number, low: number, high: number): number {
+  if (high === low) return 50
+  return Math.min(100, Math.max(0, ((our - low) / (high - low)) * 100))
+}
+
+function ratePositionLabel(pct: number): { label: string; color: string } {
+  if (pct < 20) return { label: 'Below Market', color: 'text-green-600' }
+  if (pct < 45) return { label: 'Competitive', color: 'text-blue-600' }
+  if (pct < 70) return { label: 'Market Rate', color: 'text-[var(--color-text-2)]' }
+  if (pct < 90) return { label: 'Above Market', color: 'text-amber-600' }
+  return { label: 'Premium', color: 'text-red-500' }
+}
+
+function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' }) {
+  if (trend === 'up')   return <span className="text-red-500 text-xs font-bold">↑</span>
+  if (trend === 'down') return <span className="text-green-600 text-xs font-bold">↓</span>
+  return <span className="text-slate-400 text-xs">→</span>
+}
+
+function fmt$(n: number) {
+  if (n < 10) return `$${n.toFixed(2)}`
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
+function PricingIntelligence() {
+  const [serviceFilter, setServiceFilter] = useState<'All' | 'Drayage' | 'Transloading' | 'Last Mile'>('All')
+  const [selectedInsight, setSelectedInsight] = useState<number | null>(null)
+
+  const filteredLanes = MARKET_LANES.filter(l => serviceFilter === 'All' || l.service === serviceFilter)
+
+  return (
+    <div className="space-y-8">
+
+      {/* ── Market Benchmark Cards (intel-track style) ── */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest mb-4">Market Benchmarks — Median Consensus</p>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {RATE_CARDS.map(card => (
+            <div key={card.service} className="bg-slate-900 border border-slate-700 rounded-2xl p-5 hover:border-slate-500 transition-colors">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">{card.service}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{card.subtitle}</p>
+                </div>
+                <span className="w-2 h-2 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+              </div>
+              {/* Primary rate */}
+              <div className="mb-4">
+                <span className="text-3xl font-bold font-mono text-green-400">{fmt$(card.consensusRate)}</span>
+                <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">{card.unit}</p>
+              </div>
+              {/* Variants */}
+              <div className="border-t border-slate-700 pt-3 space-y-1.5">
+                {card.variants.map(v => (
+                  <div key={v.label} className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400">{v.label}</span>
+                    <span className="text-xs font-mono font-semibold text-slate-200">{fmt$(v.rate)}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest mt-3">MEDIAN CONSENSUS • {card.updatedMonth}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Our Rates vs Market Table ── */}
+      <div>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest">Our Rates vs. Market — Lane by Lane</p>
+          <div className="flex gap-1.5">
+            {(['All', 'Drayage', 'Transloading', 'Last Mile'] as const).map(f => (
+              <button key={f} onClick={() => setServiceFilter(f)}
+                className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${serviceFilter === f ? 'bg-slate-800 text-white border-slate-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
+          <table className="w-full border-collapse">
+            <thead className="bg-[var(--color-bg-2)]">
+              <tr>
+                {['Origin', 'Lane / Service', 'Unit', 'Market Range', 'Our Rate', 'Position', 'Trend', 'Data Pts'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-bg)]">
+              {filteredLanes.map(lane => {
+                const pct = positionInRange(lane.ourRate, lane.marketLow, lane.marketHigh)
+                const { label, color } = ratePositionLabel(pct)
+                return (
+                  <tr key={lane.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
+                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] whitespace-nowrap">{lane.origin}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-[var(--color-text-1)]">{lane.destination}</div>
+                      <div className="text-xs text-[var(--color-text-3)]">{lane.service}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] whitespace-nowrap">{lane.unit}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-[var(--color-text-2)] whitespace-nowrap">
+                      {fmt$(lane.marketLow)} – {fmt$(lane.marketHigh)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold font-mono text-[var(--color-text-1)] whitespace-nowrap">
+                      {fmt$(lane.ourRate)}
+                    </td>
+                    <td className="px-4 py-3" style={{ minWidth: 160 }}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[var(--color-bg-3)] rounded-full relative">
+                          <div className="absolute inset-0 rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--color-bg-3)] rounded-full" />
+                          </div>
+                          <div
+                            className="absolute top-0 h-full bg-blue-500 rounded-full"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium whitespace-nowrap ${color}`}>{label}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center"><TrendIcon trend={lane.trend} /></td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] text-right">{lane.dataPoints}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-[var(--color-text-3)] mt-2">
+          Position bar: left = below market (competitive), right = premium. Trend shows market movement — ↑ market rising, ↓ softening.
+        </p>
+      </div>
+
+      {/* ── Rate Intelligence & Recommendations ── */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest mb-4">Rate Intelligence — Actionable Insights</p>
+        <div className="space-y-3">
+          {RATE_INSIGHTS.map((insight, i) => {
+            const styles = {
+              opportunity: { border: 'border-green-200', bg: selectedInsight === i ? 'bg-green-50' : 'bg-[var(--color-bg)]', dot: 'bg-green-500', label: 'text-green-700 bg-green-100', badge: 'Opportunity' },
+              warning:     { border: 'border-amber-200', bg: selectedInsight === i ? 'bg-amber-50' : 'bg-[var(--color-bg)]', dot: 'bg-amber-500', label: 'text-amber-700 bg-amber-100', badge: 'Monitor' },
+              info:        { border: 'border-blue-200',  bg: selectedInsight === i ? 'bg-blue-50' : 'bg-[var(--color-bg)]', dot: 'bg-blue-400',  label: 'text-blue-700 bg-blue-100',  badge: 'Info' },
+            }
+            const s = styles[insight.type]
+            return (
+              <div
+                key={i}
+                onClick={() => setSelectedInsight(selectedInsight === i ? null : i)}
+                className={`border ${s.border} ${s.bg} rounded-xl p-4 cursor-pointer transition-colors hover:opacity-90`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`w-2 h-2 rounded-full ${s.dot} mt-1.5 flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.label}`}>{s.badge}</span>
+                      <span className="text-sm font-semibold text-[var(--color-text-1)]">{insight.headline}</span>
+                    </div>
+                    {selectedInsight === i && (
+                      <p className="text-xs text-[var(--color-text-2)] leading-relaxed mt-2 mb-2">{insight.detail}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs font-medium text-[var(--color-text-3)]">Recommended action:</span>
+                      <span className="text-xs font-semibold text-[var(--color-text-1)]">{insight.action}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs text-[var(--color-text-3)] flex-shrink-0 mt-0.5">{selectedInsight === i ? '▲' : '▼'}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Summary Stats ── */}
+      <div className="grid sm:grid-cols-4 gap-4 pt-2 border-t border-[var(--color-border)]">
+        {[
+          { label: 'Lanes Tracked',     value: MARKET_LANES.length, sub: 'SoCal market' },
+          { label: 'Below / At Market', value: `${MARKET_LANES.filter(l => positionInRange(l.ourRate, l.marketLow, l.marketHigh) < 70).length}/${MARKET_LANES.length}`, sub: 'Competitive lanes' },
+          { label: 'Rising Lanes',      value: MARKET_LANES.filter(l => l.trend === 'up').length, sub: 'Mkt rate trending ↑' },
+          { label: 'Avg Data Points',   value: Math.round(MARKET_LANES.reduce((s, l) => s + l.dataPoints, 0) / MARKET_LANES.length), sub: 'Per lane' },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl p-4">
+            <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wide mb-1">{s.label}</p>
+            <p className="text-2xl font-bold text-[var(--color-text-1)]">{s.value}</p>
+            <p className="text-xs text-[var(--color-text-3)]">{s.sub}</p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -821,12 +1095,12 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
     shipments: SEED_SHIPMENTS,
   })
   const [loading, setLoading] = useState<Record<CrmSubTab, boolean>>({
-    dashboard: false, customers: false, quotes: false, carriers: false, shipments: false, analytics: false,
+    dashboard: false, customers: false, quotes: false, carriers: false, shipments: false, analytics: false, pricing: false,
   })
   const loaded = useRef<Set<CrmSubTab>>(new Set())
 
   async function fetchSection(section: CrmSubTab) {
-    if (section === 'analytics' || loaded.current.has(section)) return
+    if (section === 'analytics' || section === 'pricing' || loaded.current.has(section)) return
     setLoading(prev => ({ ...prev, [section]: true }))
     try {
       const apiSection = section === 'customers' ? 'accounts' : section
@@ -870,6 +1144,7 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
 
   const SUB_TABS: { id: CrmSubTab; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
+    { id: 'pricing',   label: 'Pricing Analytics' },
     { id: 'analytics', label: 'AI Analytics' },
     { id: 'customers', label: 'Customers' },
     { id: 'quotes', label: 'Quotes' },
@@ -906,12 +1181,14 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
       <div className="flex items-center gap-2">
         <h1 className="text-lg font-semibold text-[var(--color-text-1)]">
           {subTab === 'dashboard' && 'CRM Dashboard'}
+          {subTab === 'pricing'   && 'Pricing Analytics'}
           {subTab === 'customers' && 'Customer Accounts'}
           {subTab === 'quotes' && 'Quote History'}
           {subTab === 'carriers' && 'Carrier Management'}
           {subTab === 'shipments' && 'Shipment Tracking'}
           {subTab === 'analytics' && 'AI Analytics'}
         </h1>
+        {subTab === 'pricing'   && <span className="text-sm text-[var(--color-text-3)]">— Market rates, regional benchmarks & rate recommendations</span>}
         {subTab === 'customers' && <span className="text-sm text-[var(--color-text-3)]">— Accounts, contacts & customer tiers</span>}
         {subTab === 'quotes' && <span className="text-sm text-[var(--color-text-3)]">— Full quote pipeline & conversion tracking</span>}
         {subTab === 'carriers' && <span className="text-sm text-[var(--color-text-3)]">— MC#, DOT#, insurance & performance</span>}
@@ -934,6 +1211,9 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
       )}
       {subTab === 'shipments' && (
         <Shipments shipments={data.shipments} loading={loading.shipments} />
+      )}
+      {subTab === 'pricing' && (
+        <PricingIntelligence />
       )}
       {subTab === 'analytics' && (
         <Analytics userName={userName} />
