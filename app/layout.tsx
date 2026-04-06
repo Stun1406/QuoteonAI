@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
+import ChatWidget from '@/components/ChatWidget'
 import './globals.css'
 
 const inter = Inter({
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className="antialiased">
         <SessionProvider>
           {children}
+          <ChatWidget />
         </SessionProvider>
       </body>
     </html>

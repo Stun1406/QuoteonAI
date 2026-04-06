@@ -661,292 +661,206 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
   )
 }
 
-// ── Pricing Intelligence ──────────────────────────────────────────────────────
+// ── Pricing Intelligence (static placeholder) ────────────────────────────────
 
-interface MarketLane {
-  id: string
-  origin: string
-  destination: string
-  service: 'Drayage' | 'Transloading' | 'Last Mile'
-  unit: string
-  marketLow: number
-  marketHigh: number
-  ourRate: number
-  trend: 'up' | 'down' | 'stable'
-  dataPoints: number
-  lastUpdated: string
+type LLMRates = { chatgpt: number; gemini: number; llama: number; claude: number }
+
+
+// ── Pricing Intelligence static data ─────────────────────────────────────────
+
+const SERVICE_SUBTYPES: Record<string, { id: string; label: string }[]> = {
+  drayage:       [{ id: '40ft', label: '40ft Container' }, { id: '20ft', label: '20ft Container' }, { id: '45ft', label: '45ft Container' }],
+  transloading:  [{ id: 'regular', label: 'Regular Container' }, { id: 'oversize', label: 'Oversize Container' }, { id: 'loose-cargo', label: 'Loose Cargo' }],
+  'last-mile':   [{ id: 'straight-truck', label: 'Straight Truck' }, { id: 'box-truck', label: 'Box Truck' }, { id: 'sprinter', label: 'Sprinter Van' }],
 }
 
-interface RateCard {
-  service: string
-  subtitle: string
-  consensusRate: number
-  unit: string
-  variants: { label: string; rate: number }[]
-  region: string
-  updatedMonth: string
-}
+const PRICING_MONTHS = ['Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025']
 
-const MARKET_LANES: MarketLane[] = [
-  { id: 'l1',  origin: 'Port of LA',       destination: 'Inland Empire',      service: 'Drayage',     unit: '40ft container', marketLow: 1800, marketHigh: 2200, ourRate: 2050, trend: 'stable', dataPoints: 142, lastUpdated: 'Nov 2025' },
-  { id: 'l2',  origin: 'Port of LB',       destination: 'Ontario / Chino',    service: 'Drayage',     unit: '40ft container', marketLow: 1650, marketHigh: 2000, ourRate: 1900, trend: 'up',     dataPoints: 118, lastUpdated: 'Nov 2025' },
-  { id: 'l3',  origin: 'Port of LA',       destination: 'LA Basin (Local)',   service: 'Drayage',     unit: '40ft container', marketLow: 850,  marketHigh: 1200, ourRate: 980,  trend: 'stable', dataPoints: 203, lastUpdated: 'Nov 2025' },
-  { id: 'l4',  origin: 'Port of LA',       destination: 'Orange County',      service: 'Drayage',     unit: '40ft container', marketLow: 1100, marketHigh: 1500, ourRate: 1280, trend: 'down',   dataPoints: 97,  lastUpdated: 'Nov 2025' },
-  { id: 'l5',  origin: 'Port of LB',       destination: 'Riverside / Corona', service: 'Drayage',     unit: '40ft container', marketLow: 1900, marketHigh: 2400, ourRate: 2200, trend: 'up',     dataPoints: 85,  lastUpdated: 'Nov 2025' },
-  { id: 'l6',  origin: 'Port of LA',       destination: 'San Fernando Valley',service: 'Drayage',     unit: '40ft container', marketLow: 1300, marketHigh: 1750, ourRate: 1450, trend: 'stable', dataPoints: 76,  lastUpdated: 'Nov 2025' },
-  { id: 'l7',  origin: 'Wilmington / San Pedro', destination: 'Fontana',      service: 'Drayage',     unit: '40ft container', marketLow: 1700, marketHigh: 2100, ourRate: 1850, trend: 'stable', dataPoints: 64,  lastUpdated: 'Nov 2025' },
-  { id: 'l8',  origin: 'LA / LB Ports',   destination: 'Warehousing — Normal Pallet', service: 'Transloading', unit: 'pallet/month', marketLow: 21, marketHigh: 35, ourRate: 32, trend: 'stable', dataPoints: 89,  lastUpdated: 'Nov 2025' },
-  { id: 'l9',  origin: 'LA / LB Ports',   destination: 'Warehousing — Oversize Pallet', service: 'Transloading', unit: 'pallet/month', marketLow: 38, marketHigh: 52, ourRate: 42, trend: 'up',  dataPoints: 54,  lastUpdated: 'Nov 2025' },
-  { id: 'l10', origin: 'LA / LB Ports',   destination: 'Warehousing — Loose Cargo',  service: 'Transloading', unit: 'per container', marketLow: 150, marketHigh: 200, ourRate: 170, trend: 'stable', dataPoints: 41, lastUpdated: 'Nov 2025' },
-  { id: 'l11', origin: 'LA / LB Area',    destination: 'Local Delivery — Straight Truck', service: 'Last Mile', unit: 'per mile', marketLow: 2.80, marketHigh: 3.80, ourRate: 3.20, trend: 'down', dataPoints: 167, lastUpdated: 'Nov 2025' },
-  { id: 'l12', origin: 'LA / LB Area',    destination: 'Local Delivery — Box Truck', service: 'Last Mile', unit: 'per mile', marketLow: 2.20, marketHigh: 3.00, ourRate: 2.50, trend: 'stable', dataPoints: 129, lastUpdated: 'Nov 2025' },
-]
-
-const RATE_CARDS: RateCard[] = [
-  {
-    service: 'DRAYAGE',
-    subtitle: '40FT CONTAINER • SOCAL PORTS',
-    consensusRate: 1820,
-    unit: 'PER MOVE',
-    variants: [
-      { label: 'Local (< 30 mi)', rate: 1020 },
-      { label: 'Mid (30–60 mi)', rate: 1760 },
-      { label: 'Long (60+ mi)', rate: 2250 },
-    ],
-    region: 'LA / LONG BEACH',
-    updatedMonth: 'NOV 2025',
+// Static rates: service → subType → portName → [month0…month3]
+const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> = {
+  drayage: {
+    '40ft': {
+      'LA / LB Port, CA':   [{ chatgpt:485,gemini:492,llama:478,claude:488 },{ chatgpt:490,gemini:498,llama:482,claude:493 },{ chatgpt:502,gemini:508,llama:495,claude:504 },{ chatgpt:515,gemini:520,llama:508,claude:512 }],
+      'Houston Port, TX':   [{ chatgpt:415,gemini:408,llama:420,claude:412 },{ chatgpt:418,gemini:412,llama:425,claude:416 },{ chatgpt:425,gemini:420,llama:432,claude:423 },{ chatgpt:432,gemini:428,llama:440,claude:430 }],
+      'NY / NJ Port, NY':   [{ chatgpt:525,gemini:532,llama:518,claude:528 },{ chatgpt:530,gemini:540,llama:522,claude:534 },{ chatgpt:545,gemini:552,llama:538,claude:548 },{ chatgpt:558,gemini:565,llama:550,claude:560 }],
+      'Savannah Port, GA':  [{ chatgpt:365,gemini:370,llama:358,claude:368 },{ chatgpt:368,gemini:375,llama:362,claude:372 },{ chatgpt:375,gemini:382,llama:368,claude:378 },{ chatgpt:382,gemini:390,llama:376,claude:385 }],
+      'Seattle Port, WA':   [{ chatgpt:445,gemini:452,llama:438,claude:448 },{ chatgpt:448,gemini:455,llama:442,claude:450 },{ chatgpt:455,gemini:462,llama:448,claude:458 },{ chatgpt:462,gemini:470,llama:456,claude:466 }],
+    },
+    '20ft': {
+      'LA / LB Port, CA':   [{ chatgpt:365,gemini:370,llama:358,claude:368 },{ chatgpt:368,gemini:375,llama:362,claude:372 },{ chatgpt:378,gemini:382,llama:372,claude:380 },{ chatgpt:388,gemini:392,llama:382,claude:390 }],
+      'Houston Port, TX':   [{ chatgpt:312,gemini:308,llama:318,claude:310 },{ chatgpt:315,gemini:310,llama:320,claude:313 },{ chatgpt:320,gemini:316,llama:326,claude:318 },{ chatgpt:325,gemini:322,llama:330,claude:324 }],
+      'NY / NJ Port, NY':   [{ chatgpt:395,gemini:400,llama:388,claude:396 },{ chatgpt:398,gemini:406,llama:392,claude:400 },{ chatgpt:410,gemini:416,llama:404,claude:412 },{ chatgpt:420,gemini:425,llama:414,claude:421 }],
+      'Savannah Port, GA':  [{ chatgpt:275,gemini:278,llama:270,claude:276 },{ chatgpt:278,gemini:282,llama:274,claude:280 },{ chatgpt:282,gemini:288,llama:276,claude:285 },{ chatgpt:288,gemini:294,llama:282,claude:290 }],
+      'Seattle Port, WA':   [{ chatgpt:334,gemini:340,llama:328,claude:336 },{ chatgpt:336,gemini:342,llama:330,claude:338 },{ chatgpt:342,gemini:348,llama:336,claude:344 },{ chatgpt:348,gemini:354,llama:342,claude:350 }],
+    },
+    '45ft': {
+      'LA / LB Port, CA':   [{ chatgpt:558,gemini:565,llama:550,claude:561 },{ chatgpt:564,gemini:572,llama:554,claude:566 },{ chatgpt:577,gemini:584,llama:569,claude:579 },{ chatgpt:592,gemini:598,llama:584,claude:589 }],
+      'Houston Port, TX':   [{ chatgpt:477,gemini:469,llama:483,claude:474 },{ chatgpt:481,gemini:474,llama:489,claude:478 },{ chatgpt:489,gemini:483,llama:497,claude:486 },{ chatgpt:497,gemini:492,llama:506,claude:495 }],
+      'NY / NJ Port, NY':   [{ chatgpt:604,gemini:612,llama:596,claude:607 },{ chatgpt:610,gemini:621,llama:600,claude:614 },{ chatgpt:627,gemini:635,llama:619,claude:630 },{ chatgpt:642,gemini:650,llama:633,claude:644 }],
+      'Savannah Port, GA':  [{ chatgpt:420,gemini:426,llama:412,claude:423 },{ chatgpt:423,gemini:432,llama:416,claude:428 },{ chatgpt:431,gemini:439,llama:423,claude:434 },{ chatgpt:439,gemini:449,llama:433,claude:443 }],
+      'Seattle Port, WA':   [{ chatgpt:512,gemini:520,llama:504,claude:515 },{ chatgpt:515,gemini:524,llama:508,claude:518 },{ chatgpt:523,gemini:531,llama:515,claude:527 },{ chatgpt:531,gemini:541,llama:524,claude:536 }],
+    },
   },
-  {
-    service: 'TRANSLOADING',
-    subtitle: 'PALLETIZED • 5 PORTS',
-    consensusRate: 28.50,
-    unit: 'PER PALLET / MONTH',
-    variants: [
-      { label: 'Normal', rate: 23.50 },
-      { label: 'Oversize', rate: 44.00 },
-    ],
-    region: 'SOUTHERN CALIFORNIA',
-    updatedMonth: 'NOV 2025',
+  transloading: {
+    'regular': {
+      'LA / LB Port, CA':   [{ chatgpt:14,gemini:15,llama:13,claude:14 },{ chatgpt:14,gemini:15,llama:14,claude:15 },{ chatgpt:15,gemini:16,llama:14,claude:15 },{ chatgpt:15,gemini:16,llama:15,claude:16 }],
+      'Houston Port, TX':   [{ chatgpt:12,gemini:12,llama:11,claude:12 },{ chatgpt:12,gemini:13,llama:11,claude:12 },{ chatgpt:12,gemini:13,llama:12,claude:13 },{ chatgpt:13,gemini:13,llama:12,claude:13 }],
+      'NY / NJ Port, NY':   [{ chatgpt:16,gemini:17,llama:15,claude:16 },{ chatgpt:16,gemini:17,llama:15,claude:17 },{ chatgpt:17,gemini:18,llama:16,claude:17 },{ chatgpt:17,gemini:18,llama:17,claude:18 }],
+      'Savannah Port, GA':  [{ chatgpt:11,gemini:12,llama:11,claude:11 },{ chatgpt:11,gemini:12,llama:11,claude:12 },{ chatgpt:12,gemini:12,llama:11,claude:12 },{ chatgpt:12,gemini:13,llama:12,claude:12 }],
+    },
+    'oversize': {
+      'LA / LB Port, CA':   [{ chatgpt:22,gemini:23,llama:21,claude:22 },{ chatgpt:22,gemini:23,llama:21,claude:23 },{ chatgpt:23,gemini:24,llama:22,claude:23 },{ chatgpt:23,gemini:25,llama:23,claude:24 }],
+      'Houston Port, TX':   [{ chatgpt:18,gemini:19,llama:17,claude:18 },{ chatgpt:18,gemini:19,llama:18,claude:19 },{ chatgpt:19,gemini:20,llama:18,claude:19 },{ chatgpt:19,gemini:20,llama:19,claude:20 }],
+      'NY / NJ Port, NY':   [{ chatgpt:25,gemini:26,llama:24,claude:25 },{ chatgpt:25,gemini:26,llama:24,claude:26 },{ chatgpt:26,gemini:27,llama:25,claude:26 },{ chatgpt:26,gemini:28,llama:26,claude:27 }],
+      'Savannah Port, GA':  [{ chatgpt:16,gemini:17,llama:15,claude:16 },{ chatgpt:16,gemini:17,llama:16,claude:17 },{ chatgpt:17,gemini:18,llama:16,claude:17 },{ chatgpt:17,gemini:18,llama:17,claude:18 }],
+    },
+    'loose-cargo': {
+      'LA / LB Port, CA':   [{ chatgpt:485,gemini:495,llama:475,claude:490 },{ chatgpt:490,gemini:500,llama:480,claude:495 },{ chatgpt:498,gemini:508,llama:488,claude:502 },{ chatgpt:505,gemini:515,llama:495,claude:510 }],
+      'Houston Port, TX':   [{ chatgpt:420,gemini:428,llama:412,claude:422 },{ chatgpt:425,gemini:432,llama:415,claude:428 },{ chatgpt:432,gemini:440,llama:422,claude:435 },{ chatgpt:438,gemini:448,llama:428,claude:442 }],
+      'NY / NJ Port, NY':   [{ chatgpt:535,gemini:545,llama:525,claude:538 },{ chatgpt:540,gemini:552,llama:530,claude:544 },{ chatgpt:548,gemini:560,llama:538,claude:552 },{ chatgpt:555,gemini:568,llama:545,claude:558 }],
+      'Savannah Port, GA':  [{ chatgpt:382,gemini:390,llama:375,claude:385 },{ chatgpt:386,gemini:394,llama:378,claude:388 },{ chatgpt:392,gemini:400,llama:384,claude:395 },{ chatgpt:398,gemini:408,llama:390,claude:401 }],
+    },
   },
-  {
-    service: 'LAST MILE',
-    subtitle: 'STRAIGHT TRUCK • LOCAL LANES',
-    consensusRate: 3.20,
-    unit: 'PER MILE',
-    variants: [
-      { label: 'Box Truck', rate: 2.60 },
-      { label: 'Straight Truck', rate: 3.20 },
-      { label: 'Semi / 53ft', rate: 4.10 },
-    ],
-    region: 'LA BASIN',
-    updatedMonth: 'NOV 2025',
+  'last-mile': {
+    'straight-truck': {
+      'LA Basin, CA':        [{ chatgpt:425,gemini:440,llama:415,claude:430 },{ chatgpt:430,gemini:445,llama:420,claude:435 },{ chatgpt:435,gemini:450,llama:425,claude:440 },{ chatgpt:440,gemini:455,llama:430,claude:445 }],
+      'Houston Metro, TX':   [{ chatgpt:365,gemini:375,llama:355,claude:368 },{ chatgpt:368,gemini:378,llama:358,claude:372 },{ chatgpt:372,gemini:382,llama:362,claude:376 },{ chatgpt:376,gemini:386,llama:366,claude:380 }],
+      'NYC Metro, NY':       [{ chatgpt:485,gemini:500,llama:470,claude:488 },{ chatgpt:490,gemini:505,llama:475,claude:492 },{ chatgpt:495,gemini:510,llama:480,claude:498 },{ chatgpt:500,gemini:515,llama:485,claude:503 }],
+      'Atlanta Metro, GA':   [{ chatgpt:345,gemini:355,llama:336,claude:348 },{ chatgpt:348,gemini:358,llama:338,claude:352 },{ chatgpt:352,gemini:362,llama:342,claude:356 },{ chatgpt:356,gemini:366,llama:346,claude:360 }],
+    },
+    'box-truck': {
+      'LA Basin, CA':        [{ chatgpt:315,gemini:325,llama:308,claude:318 },{ chatgpt:318,gemini:328,llama:310,claude:322 },{ chatgpt:322,gemini:332,llama:314,claude:326 },{ chatgpt:326,gemini:336,llama:318,claude:330 }],
+      'Houston Metro, TX':   [{ chatgpt:275,gemini:282,llama:268,claude:278 },{ chatgpt:278,gemini:285,llama:270,claude:280 },{ chatgpt:282,gemini:288,llama:274,claude:284 },{ chatgpt:285,gemini:292,llama:278,claude:288 }],
+      'NYC Metro, NY':       [{ chatgpt:355,gemini:365,llama:346,claude:358 },{ chatgpt:358,gemini:368,llama:348,claude:362 },{ chatgpt:362,gemini:372,llama:352,claude:366 },{ chatgpt:366,gemini:376,llama:356,claude:370 }],
+      'Atlanta Metro, GA':   [{ chatgpt:260,gemini:268,llama:252,claude:262 },{ chatgpt:262,gemini:270,llama:254,claude:264 },{ chatgpt:265,gemini:273,llama:257,claude:267 },{ chatgpt:268,gemini:276,llama:260,claude:270 }],
+    },
+    'sprinter': {
+      'LA Basin, CA':        [{ chatgpt:220,gemini:228,llama:214,claude:222 },{ chatgpt:222,gemini:230,llama:216,claude:224 },{ chatgpt:225,gemini:233,llama:218,claude:227 },{ chatgpt:228,gemini:236,llama:221,claude:230 }],
+      'Houston Metro, TX':   [{ chatgpt:192,gemini:198,llama:186,claude:194 },{ chatgpt:194,gemini:200,llama:188,claude:196 },{ chatgpt:196,gemini:202,llama:190,claude:198 },{ chatgpt:198,gemini:204,llama:192,claude:200 }],
+      'NYC Metro, NY':       [{ chatgpt:245,gemini:254,llama:238,claude:248 },{ chatgpt:248,gemini:257,llama:240,claude:250 },{ chatgpt:250,gemini:260,llama:243,claude:253 },{ chatgpt:253,gemini:263,llama:246,claude:256 }],
+      'Atlanta Metro, GA':   [{ chatgpt:178,gemini:185,llama:172,claude:180 },{ chatgpt:180,gemini:187,llama:174,claude:182 },{ chatgpt:182,gemini:189,llama:176,claude:184 },{ chatgpt:184,gemini:191,llama:178,claude:186 }],
+    },
   },
-]
-
-interface RateInsight {
-  type: 'opportunity' | 'warning' | 'info'
-  headline: string
-  detail: string
-  action: string
 }
 
-const RATE_INSIGHTS: RateInsight[] = [
-  { type: 'opportunity', headline: 'OC Drayage: room to increase', detail: 'Your Port of LA → Orange County rate ($1,280) sits 12% below the $1,100–$1,500 market range midpoint. Capacity on this lane is tight — market is trending down, suggesting competitors are winning bids. Consider a modest 5–8% increase.', action: 'Adjust rate to ~$1,360' },
-  { type: 'warning',     headline: 'Riverside lane tracking above median', detail: 'Port of LB → Riverside rate ($2,200) is near the top of the $1,900–$2,400 market range and trend is upward. Monitor closely — being top-priced on a rising-cost lane may create win-rate pressure.', action: 'Hold rate, review monthly' },
-  { type: 'opportunity', headline: 'Last-mile: below market on straight truck', detail: 'Your per-mile rate ($3.20) matches the market median, but the market is showing a downward trend. Locking in volume deals now at current rates before market softening could protect revenue.', action: 'Offer volume incentives now' },
-  { type: 'info',        headline: 'Transloading storage: well-positioned', detail: 'Your normal pallet rate ($32/pallet/month) falls within the upper half of the $21–$35 market range, reflecting warehouse quality and location premium. No action needed.', action: 'Maintain current rates' },
-]
-
-function positionInRange(our: number, low: number, high: number): number {
-  if (high === low) return 50
-  return Math.min(100, Math.max(0, ((our - low) / (high - low)) * 100))
+function medianOf4(a: number, b: number, c: number, d: number): number {
+  const s = [a, b, c, d].sort((x, y) => x - y)
+  return Math.round((s[1] + s[2]) / 2)
 }
 
-function ratePositionLabel(pct: number): { label: string; color: string } {
-  if (pct < 20) return { label: 'Below Market', color: 'text-green-600' }
-  if (pct < 45) return { label: 'Competitive', color: 'text-blue-600' }
-  if (pct < 70) return { label: 'Market Rate', color: 'text-[var(--color-text-2)]' }
-  if (pct < 90) return { label: 'Above Market', color: 'text-amber-600' }
-  return { label: 'Premium', color: 'text-red-500' }
-}
-
-function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' }) {
-  if (trend === 'up')   return <span className="text-red-500 text-xs font-bold">↑</span>
-  if (trend === 'down') return <span className="text-green-600 text-xs font-bold">↓</span>
-  return <span className="text-slate-400 text-xs">→</span>
-}
-
-function fmt$(n: number) {
+function fmtRate(n: number): string {
+  if (n === 0) return '—'
   if (n < 10) return `$${n.toFixed(2)}`
-  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
 }
+
+
+
+
+// ── Pricing Intelligence component ────────────────────────────────────────────
 
 function PricingIntelligence() {
-  const [serviceFilter, setServiceFilter] = useState<'All' | 'Drayage' | 'Transloading' | 'Last Mile'>('All')
-  const [selectedInsight, setSelectedInsight] = useState<number | null>(null)
+  const [service, setService] = useState<'drayage' | 'transloading' | 'last-mile'>('drayage')
+  const [subType, setSubType] = useState('40ft')
+  const [monthIdx, setMonthIdx] = useState(0)
+  const [yourRates, setYourRates] = useState<Record<string, string>>({})
 
-  const filteredLanes = MARKET_LANES.filter(l => serviceFilter === 'All' || l.service === serviceFilter)
+  function switchService(s: 'drayage' | 'transloading' | 'last-mile') {
+    setService(s)
+    setSubType(SERVICE_SUBTYPES[s][0].id)
+  }
+
+  const ports = STATIC_RATES[service]?.[subType] ?? {}
+  const portNames = Object.keys(ports)
+
+  function yourRateKey(port: string) { return `${service}_${subType}_${port}` }
+
+  function yourRateColor(port: string, median: number): string {
+    const your = parseFloat(yourRates[yourRateKey(port)] ?? '')
+    if (isNaN(your) || median === 0) return ''
+    const pct = (your - median) / median
+    if (pct <= 0.05) return 'bg-green-50 border-green-400 text-green-700'
+    if (pct <= 0.15) return 'bg-amber-50 border-amber-400 text-amber-700'
+    return 'bg-red-50 border-red-400 text-red-700'
+  }
 
   return (
-    <div className="space-y-8">
-
-      {/* ── Market Benchmark Cards (intel-track style) ── */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest mb-4">Market Benchmarks — Median Consensus</p>
-        <div className="grid sm:grid-cols-3 gap-4">
-          {RATE_CARDS.map(card => (
-            <div key={card.service} className="bg-slate-900 border border-slate-700 rounded-2xl p-5 hover:border-slate-500 transition-colors">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">{card.service}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{card.subtitle}</p>
-                </div>
-                <span className="w-2 h-2 rounded-full bg-green-500 mt-1 flex-shrink-0" />
-              </div>
-              {/* Primary rate */}
-              <div className="mb-4">
-                <span className="text-3xl font-bold font-mono text-green-400">{fmt$(card.consensusRate)}</span>
-                <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">{card.unit}</p>
-              </div>
-              {/* Variants */}
-              <div className="border-t border-slate-700 pt-3 space-y-1.5">
-                {card.variants.map(v => (
-                  <div key={v.label} className="flex justify-between items-center">
-                    <span className="text-xs text-slate-400">{v.label}</span>
-                    <span className="text-xs font-mono font-semibold text-slate-200">{fmt$(v.rate)}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Footer */}
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest mt-3">MEDIAN CONSENSUS • {card.updatedMonth}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Our Rates vs Market Table ── */}
-      <div>
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest">Our Rates vs. Market — Lane by Lane</p>
-          <div className="flex gap-1.5">
-            {(['All', 'Drayage', 'Transloading', 'Last Mile'] as const).map(f => (
-              <button key={f} onClick={() => setServiceFilter(f)}
-                className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${serviceFilter === f ? 'bg-slate-800 text-white border-slate-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
-          <table className="w-full border-collapse">
-            <thead className="bg-[var(--color-bg-2)]">
-              <tr>
-                {['Origin', 'Lane / Service', 'Unit', 'Market Range', 'Our Rate', 'Position', 'Trend', 'Data Pts'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-bg)]">
-              {filteredLanes.map(lane => {
-                const pct = positionInRange(lane.ourRate, lane.marketLow, lane.marketHigh)
-                const { label, color } = ratePositionLabel(pct)
-                return (
-                  <tr key={lane.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] whitespace-nowrap">{lane.origin}</td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-[var(--color-text-1)]">{lane.destination}</div>
-                      <div className="text-xs text-[var(--color-text-3)]">{lane.service}</div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] whitespace-nowrap">{lane.unit}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-[var(--color-text-2)] whitespace-nowrap">
-                      {fmt$(lane.marketLow)} – {fmt$(lane.marketHigh)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold font-mono text-[var(--color-text-1)] whitespace-nowrap">
-                      {fmt$(lane.ourRate)}
-                    </td>
-                    <td className="px-4 py-3" style={{ minWidth: 160 }}>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-[var(--color-bg-3)] rounded-full relative">
-                          <div className="absolute inset-0 rounded-full overflow-hidden">
-                            <div className="h-full bg-[var(--color-bg-3)] rounded-full" />
-                          </div>
-                          <div
-                            className="absolute top-0 h-full bg-blue-500 rounded-full"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className={`text-xs font-medium whitespace-nowrap ${color}`}>{label}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center"><TrendIcon trend={lane.trend} /></td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-text-3)] text-right">{lane.dataPoints}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-[var(--color-text-3)] mt-2">
-          Position bar: left = below market (competitive), right = premium. Trend shows market movement — ↑ market rising, ↓ softening.
-        </p>
-      </div>
-
-      {/* ── Rate Intelligence & Recommendations ── */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-widest mb-4">Rate Intelligence — Actionable Insights</p>
-        <div className="space-y-3">
-          {RATE_INSIGHTS.map((insight, i) => {
-            const styles = {
-              opportunity: { border: 'border-green-200', bg: selectedInsight === i ? 'bg-green-50' : 'bg-[var(--color-bg)]', dot: 'bg-green-500', label: 'text-green-700 bg-green-100', badge: 'Opportunity' },
-              warning:     { border: 'border-amber-200', bg: selectedInsight === i ? 'bg-amber-50' : 'bg-[var(--color-bg)]', dot: 'bg-amber-500', label: 'text-amber-700 bg-amber-100', badge: 'Monitor' },
-              info:        { border: 'border-blue-200',  bg: selectedInsight === i ? 'bg-blue-50' : 'bg-[var(--color-bg)]', dot: 'bg-blue-400',  label: 'text-blue-700 bg-blue-100',  badge: 'Info' },
-            }
-            const s = styles[insight.type]
-            return (
-              <div
-                key={i}
-                onClick={() => setSelectedInsight(selectedInsight === i ? null : i)}
-                className={`border ${s.border} ${s.bg} rounded-xl p-4 cursor-pointer transition-colors hover:opacity-90`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full ${s.dot} mt-1.5 flex-shrink-0`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.label}`}>{s.badge}</span>
-                      <span className="text-sm font-semibold text-[var(--color-text-1)]">{insight.headline}</span>
-                    </div>
-                    {selectedInsight === i && (
-                      <p className="text-xs text-[var(--color-text-2)] leading-relaxed mt-2 mb-2">{insight.detail}</p>
-                    )}
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-xs font-medium text-[var(--color-text-3)]">Recommended action:</span>
-                      <span className="text-xs font-semibold text-[var(--color-text-1)]">{insight.action}</span>
-                    </div>
-                  </div>
-                  <span className="text-xs text-[var(--color-text-3)] flex-shrink-0 mt-0.5">{selectedInsight === i ? '▲' : '▼'}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Summary Stats ── */}
-      <div className="grid sm:grid-cols-4 gap-4 pt-2 border-t border-[var(--color-border)]">
-        {[
-          { label: 'Lanes Tracked',     value: MARKET_LANES.length, sub: 'SoCal market' },
-          { label: 'Below / At Market', value: `${MARKET_LANES.filter(l => positionInRange(l.ourRate, l.marketLow, l.marketHigh) < 70).length}/${MARKET_LANES.length}`, sub: 'Competitive lanes' },
-          { label: 'Rising Lanes',      value: MARKET_LANES.filter(l => l.trend === 'up').length, sub: 'Mkt rate trending ↑' },
-          { label: 'Avg Data Points',   value: Math.round(MARKET_LANES.reduce((s, l) => s + l.dataPoints, 0) / MARKET_LANES.length), sub: 'Per lane' },
-        ].map(s => (
-          <div key={s.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl p-4">
-            <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wide mb-1">{s.label}</p>
-            <p className="text-2xl font-bold text-[var(--color-text-1)]">{s.value}</p>
-            <p className="text-xs text-[var(--color-text-3)]">{s.sub}</p>
-          </div>
+    <div className="space-y-5">
+      {/* Service tabs */}
+      <div className="flex gap-1.5 flex-wrap">
+        {(['drayage', 'transloading', 'last-mile'] as const).map(s => (
+          <button key={s} onClick={() => switchService(s)}
+            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${service === s ? 'bg-blue-600 text-white' : 'border border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+            {s === 'last-mile' ? 'Last Mile' : s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
         ))}
       </div>
+
+      {/* Sub-type tabs */}
+      <div className="flex gap-1.5 flex-wrap">
+        {SERVICE_SUBTYPES[service].map(st => (
+          <button key={st.id} onClick={() => setSubType(st.id)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${subType === st.id ? 'bg-slate-800 text-white border-slate-700' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Month tabs */}
+      <div className="flex gap-1.5">
+        {PRICING_MONTHS.map((m, i) => (
+          <button key={m} onClick={() => setMonthIdx(i)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${monthIdx === i ? 'bg-blue-600 text-white border-blue-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-[var(--color-bg-2)]">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Port</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-green-700 whitespace-nowrap">Avg Rate ChatGPT</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-blue-700 whitespace-nowrap">Avg Rate Gemini</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-violet-700 whitespace-nowrap">Avg Rate Llama</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-orange-700 whitespace-nowrap">Avg Rate Claude</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-1)] uppercase tracking-wide whitespace-nowrap">Median Rate</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Your Rate</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-bg)]">
+            {portNames.map(port => {
+              const r = ports[port]?.[monthIdx]
+              if (!r) return null
+              const median = medianOf4(r.chatgpt, r.gemini, r.llama, r.claude)
+              return (
+                <tr key={port} className="hover:bg-[var(--color-bg-2)] transition-colors">
+                  <td className="px-4 py-3 font-medium text-[var(--color-text-1)] whitespace-nowrap">{port}</td>
+                  <td className="px-3 py-3 text-center font-mono text-sm text-green-700">{fmtRate(r.chatgpt)}</td>
+                  <td className="px-3 py-3 text-center font-mono text-sm text-blue-700">{fmtRate(r.gemini)}</td>
+                  <td className="px-3 py-3 text-center font-mono text-sm text-violet-700">{fmtRate(r.llama)}</td>
+                  <td className="px-3 py-3 text-center font-mono text-sm text-orange-700">{fmtRate(r.claude)}</td>
+                  <td className="px-3 py-3 text-center font-mono font-bold text-[var(--color-text-1)]">{fmtRate(median)}</td>
+                  <td className="px-3 py-3 text-center">
+                    <input
+                      type="number"
+                      value={yourRates[yourRateKey(port)] ?? ''}
+                      onChange={e => setYourRates(prev => ({ ...prev, [yourRateKey(port)]: e.target.value }))}
+                      placeholder="—"
+                      className={`w-24 px-2 py-1 text-xs text-center font-mono border rounded-lg focus:outline-none focus:border-blue-400 bg-[var(--color-bg)] transition-colors ${yourRateColor(port, median) || 'border-[var(--color-border)] text-[var(--color-text-1)]'}`}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-[var(--color-text-3)]">
+        Your Rate: green = at/below median · amber = 5–15% above · red = &gt;15% above
+      </p>
     </div>
   )
 }
@@ -1144,8 +1058,8 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
 
   const SUB_TABS: { id: CrmSubTab; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'pricing',   label: 'Pricing Analytics' },
     { id: 'analytics', label: 'AI Analytics' },
+    { id: 'pricing',   label: 'Pricing Analytics' },
     { id: 'customers', label: 'Customers' },
     { id: 'quotes', label: 'Quotes' },
     { id: 'carriers', label: 'Carriers' },
