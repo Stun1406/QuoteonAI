@@ -744,6 +744,10 @@ export default function QuoteTool() {
   const [simTaxPct, setSimTaxPct] = useState<number | null>(null)
   const [showDiscountPicker, setShowDiscountPicker] = useState(false)
   const [showTaxPicker, setShowTaxPicker] = useState(false)
+  const [discountCustomMode, setDiscountCustomMode] = useState(false)
+  const [taxCustomMode, setTaxCustomMode] = useState(false)
+  const [discountCustomVal, setDiscountCustomVal] = useState('')
+  const [taxCustomVal, setTaxCustomVal] = useState('')
 
   // ── Search ─────────────────────────────────────────────────────────────────
   const [searchBy, setSearchBy] = useState('Subject')
@@ -3257,56 +3261,129 @@ export default function QuoteTool() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   function renderDiscountTaxPanel(base: number) {
-    const DISCOUNT_OPTS = [5, 10, 15, 20, 25]
-    const TAX_OPTS = [5, 7.75, 8.25, 9, 10]
+    const DISCOUNT_OPTS = [3, 5, 10, 15, 20]
+    const TAX_OPTS = [5, 7.5, 10, 12.5, 18]
     const discountAmt = simDiscountPct != null ? base * simDiscountPct / 100 : 0
     const afterDiscount = base - discountAmt
     const taxAmt = simTaxPct != null ? afterDiscount * simTaxPct / 100 : 0
     const finalTotal = afterDiscount + taxAmt
+
+    function applyCustomDiscount() {
+      const v = parseFloat(discountCustomVal)
+      if (!isNaN(v) && v >= 0 && v <= 100) {
+        setSimDiscountPct(v); setShowDiscountPicker(false); setDiscountCustomMode(false); setDiscountCustomVal('')
+      }
+    }
+    function applyCustomTax() {
+      const v = parseFloat(taxCustomVal)
+      if (!isNaN(v) && v >= 0 && v <= 100) {
+        setSimTaxPct(v); setShowTaxPicker(false); setTaxCustomMode(false); setTaxCustomVal('')
+      }
+    }
+
     return (
       <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+        {/* Toggle buttons */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <button
             type="button"
-            onClick={() => { setShowDiscountPicker(v => !v); setShowTaxPicker(false) }}
+            onClick={() => { setShowDiscountPicker(v => !v); setShowTaxPicker(false); setTaxCustomMode(false) }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${simDiscountPct != null ? 'bg-green-50 border-green-300 text-green-700' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}
           >
             {simDiscountPct != null ? `Discount: ${simDiscountPct}%` : '+ Add Discount'}
           </button>
           {simDiscountPct != null && (
-            <button type="button" onClick={() => setSimDiscountPct(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+            <button type="button" onClick={() => { setSimDiscountPct(null); setDiscountCustomMode(false) }} className="text-xs text-red-400 hover:text-red-600">✕</button>
           )}
           <button
             type="button"
-            onClick={() => { setShowTaxPicker(v => !v); setShowDiscountPicker(false) }}
+            onClick={() => { setShowTaxPicker(v => !v); setShowDiscountPicker(false); setDiscountCustomMode(false) }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${simTaxPct != null ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}
           >
             {simTaxPct != null ? `Tax: ${simTaxPct}%` : '+ Add Tax'}
           </button>
           {simTaxPct != null && (
-            <button type="button" onClick={() => setSimTaxPct(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+            <button type="button" onClick={() => { setSimTaxPct(null); setTaxCustomMode(false) }} className="text-xs text-red-400 hover:text-red-600">✕</button>
           )}
         </div>
+
+        {/* Discount picker */}
         {showDiscountPicker && (
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {DISCOUNT_OPTS.map(p => (
-              <button key={p} type="button" onClick={() => { setSimDiscountPct(p); setShowDiscountPicker(false) }}
-                className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${simDiscountPct === p ? 'bg-green-500 text-white border-green-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-green-50 hover:border-green-300 hover:text-green-700'}`}>
-                {p}%
+          <div className="mb-3 space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              {DISCOUNT_OPTS.map(p => (
+                <button key={p} type="button"
+                  onClick={() => { setSimDiscountPct(p); setShowDiscountPicker(false); setDiscountCustomMode(false) }}
+                  className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${simDiscountPct === p ? 'bg-green-500 text-white border-green-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-green-50 hover:border-green-300 hover:text-green-700'}`}>
+                  {p}%
+                </button>
+              ))}
+              <button type="button"
+                onClick={() => setDiscountCustomMode(v => !v)}
+                className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${discountCustomMode ? 'bg-green-500 text-white border-green-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-green-50 hover:border-green-300 hover:text-green-700'}`}>
+                Custom
               </button>
-            ))}
+            </div>
+            {discountCustomMode && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="0" max="100" step="0.1"
+                  value={discountCustomVal}
+                  onChange={e => setDiscountCustomVal(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && applyCustomDiscount()}
+                  placeholder="e.g. 12.5"
+                  className="w-28 px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none focus:border-green-400"
+                  autoFocus
+                />
+                <span className="text-xs text-[var(--color-text-3)]">%</span>
+                <button type="button" onClick={applyCustomDiscount}
+                  className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                  Apply
+                </button>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Tax picker */}
         {showTaxPicker && (
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {TAX_OPTS.map(p => (
-              <button key={p} type="button" onClick={() => { setSimTaxPct(p); setShowTaxPicker(false) }}
-                className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${simTaxPct === p ? 'bg-blue-500 text-white border-blue-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'}`}>
-                {p}%
+          <div className="mb-3 space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              {TAX_OPTS.map(p => (
+                <button key={p} type="button"
+                  onClick={() => { setSimTaxPct(p); setShowTaxPicker(false); setTaxCustomMode(false) }}
+                  className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${simTaxPct === p ? 'bg-blue-500 text-white border-blue-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'}`}>
+                  {p}%
+                </button>
+              ))}
+              <button type="button"
+                onClick={() => setTaxCustomMode(v => !v)}
+                className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${taxCustomMode ? 'bg-blue-500 text-white border-blue-500' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'}`}>
+                Custom
               </button>
-            ))}
+            </div>
+            {taxCustomMode && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="0" max="100" step="0.1"
+                  value={taxCustomVal}
+                  onChange={e => setTaxCustomVal(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && applyCustomTax()}
+                  placeholder="e.g. 8.25"
+                  className="w-28 px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none focus:border-blue-400"
+                  autoFocus
+                />
+                <span className="text-xs text-[var(--color-text-3)]">%</span>
+                <button type="button" onClick={applyCustomTax}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                  Apply
+                </button>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Breakdown */}
         {(simDiscountPct != null || simTaxPct != null) && (
           <div className="space-y-1.5 text-sm mt-2">
             <div className="flex justify-between text-[var(--color-text-2)]">
