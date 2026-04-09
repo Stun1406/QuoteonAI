@@ -32,12 +32,13 @@ Parse the email in one pass and return ONLY valid JSON. No markdown. No explanat
 - For forwarded emails: extract the ORIGINAL sender, not the forwarder
 
 ## Intent classification rules
-- drayage: any mention of a container size (20/40/45/53 ft) moving from a port to a destination city
-- transloading: unloading/sorting containers in a warehouse, palletizing, shrink wrap, BOL, repackaging
+- drayage: container moved FROM a port TO a destination city/warehouse (port-to-door move, no warehouse work)
+- transloading: ANY warehouse operation — unloading, palletizing, shrink wrap, BOL, repackaging, sorting cargo. Container sizes may be mentioned but the work happens AT the warehouse, not a port-to-door move.
 - warehousing: storage only, monthly pallet storage, handling in/out without transloading
 - last-mile: delivery by truck, number of stops, mileage, liftgate requests
 - general-inquiry: questions about services, hours, availability
-- If in doubt between drayage and general-inquiry and a container size or port is mentioned: choose drayage
+- PRIORITY RULE: if the email mentions transloading, palletizing, shrink wrap, BOL creation, or repackaging → classify as "transloading" ALWAYS, even if container sizes are also mentioned
+- If in doubt between drayage and general-inquiry and a port or container size is mentioned (but NO warehouse keywords): choose drayage
 
 ## Response format
 {

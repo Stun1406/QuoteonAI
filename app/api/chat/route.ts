@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email/send'
+import { createMessageThread, generateThreadId } from '@/lib/db/tables/thread'
+import { addArtifactToThread } from '@/lib/db/services/thread-service'
 
 // ── Base rates (midpoint of static data) ──────────────────────────────────────
 
@@ -71,11 +73,16 @@ QuoteonAI is an AI-powered freight logistics platform offering:
 
 When a customer wants a quote, collect this information conversationally (one or two questions at a time):
 1. Service type (drayage, transloading, or last-mile)
-2. Port or region
+2. Port or region (see per-service notes below)
 3. Container/vehicle type (be specific — offer options if unsure)
 4. Quantity (number of containers, pallets, or trips)
 5. Customer's full name
 6. Customer's email address
+
+Per-service field guidance — IMPORTANT:
+- Drayage: needs the PORT of origin (e.g. LA/LB, Houston, NY/NJ, Savannah, Seattle). No destination city needed — we deliver to any warehouse.
+- Transloading: needs the PORT/WAREHOUSE location only. Do NOT ask for a destination city — transloading is warehouse work at the port location.
+- Last Mile: needs the METRO REGION for delivery (LA Basin CA, Houston Metro TX, NYC Metro NY, Atlanta Metro GA).
 
 Once you have ALL 6 items confirmed, call the generate_quote function immediately — do not ask for confirmation first.
 
@@ -203,8 +210,9 @@ async function handleGenerateQuote(args: QuoteArgs) {
     valid_days: 30,
   }
 
-  // Fire-and-forget email — don't block the response
+  // Fire-and-forget: send email + create inbox thread record
   sendQuoteEmail(quote, unitSingular).catch(e => console.error('[chat email]', e))
+  createInboxRecord(quote).catch(e => console.error('[chat inbox]', e))
 
   const lines = [
     `I've generated your quote and sent it to **${args.customer_email}**! Here's a summary:`,
@@ -218,10 +226,60 @@ async function handleGenerateQuote(args: QuoteArgs) {
     ...(portFees ? [`• Port fees: $${portFees.toLocaleString()}`] : []),
     `• **Total: $${total.toLocaleString()}**`,
     '',
-    `This quote is valid for 30 days. Is there anything else I can help you with?`,
+    `We have sent the quote to your inbox. Please **reply to that email** to confirm you'd like to move forward — our team will proceed once we receive your confirmation.`,
   ]
 
   return { message: lines.join('\n'), quote }
+}
+
+async function createInboxRecord(quote: {
+  id: string; customer_name: string; customer_email: string
+  service: string; service_label: string; sub_type: string; port: string
+  quantity: number; quantity_unit: string; base_rate: number
+  subtotal: number; fuel_surcharge: number; port_fees: number; total: number
+}) {
+  try {
+    const tenantId = process.env.TENANT_ID
+    const projectId = process.env.PROJECT_ID
+    if (!tenantId || !projectId) return
+
+    const threadId = generateThreadId()
+    const thread = await createMessageThread({
+      tenantId,
+      projectId,
+      threadId,
+      intent: quote.service,
+      processorType: quote.service,
+      confidenceScore: 1.0,
+    })
+
+    await addArtifactToThread({
+      threadId: thread.id,
+      tenantId,
+      projectId,
+      type: 'chatbot-quote',
+      data: {
+        quoteId: quote.id,
+        customerName: quote.customer_name,
+        customerEmail: quote.customer_email,
+        service: quote.service,
+        serviceLabel: quote.service_label,
+        subType: quote.sub_type,
+        port: quote.port,
+        quantity: quote.quantity,
+        quantityUnit: quote.quantity_unit,
+        baseRate: quote.base_rate,
+        subtotal: quote.subtotal,
+        fuelSurcharge: quote.fuel_surcharge,
+        portFees: quote.port_fees,
+        total: quote.total,
+        source: 'chatbot',
+        status: 'awaiting-confirmation',
+      },
+    })
+  } catch {
+    // Silently fail — inbox is secondary to the customer email
+  }
 }
 
 async function sendQuoteEmail(quote: {

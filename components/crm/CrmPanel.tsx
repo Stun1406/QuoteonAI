@@ -609,7 +609,7 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
 
   const filtered = shipments.filter(s => {
     const q = search.toLowerCase()
-    const matchSearch = !q || s.bol_number?.toLowerCase().includes(q) || s.customer_company?.toLowerCase().includes(q) || s.origin?.toLowerCase().includes(q) || s.destination?.toLowerCase().includes(q)
+    const matchSearch = !q || s.id?.toLowerCase().includes(q) || s.customer_company?.toLowerCase().includes(q) || s.origin?.toLowerCase().includes(q) || s.destination?.toLowerCase().includes(q)
     const matchStatus = filterStatus === 'all' || s.status === filterStatus
     return matchSearch && matchStatus
   })
@@ -620,7 +620,7 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by BOL#, customer, origin, destination..."
+          placeholder="Search by Shipment ID, customer, origin, destination..."
           className="flex-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none focus:border-blue-500"
         />
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none">
@@ -636,10 +636,10 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
       ) : filtered.length === 0 ? (
         <EmptyState title="No shipments yet" sub="Shipments are tracked here once orders are confirmed and booked." />
       ) : (
-        <Table headers={['BOL #', 'Customer', 'Carrier', 'Route', 'Equipment', 'Service', 'Pickup', 'Delivery', 'Value', 'Status']}>
+        <Table headers={['Shipment ID', 'Customer', 'Carrier', 'Route', 'Equipment', 'Service', 'Pickup', 'Delivery', 'Value', 'Status']}>
           {filtered.map(s => (
             <tr key={s.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-              <TD><span className="font-mono text-xs">{s.bol_number ?? '—'}</span></TD>
+              <TD><span className="font-mono text-xs">{s.id}</span></TD>
               <TD>{s.customer_company ?? s.customer_name ?? '—'}</TD>
               <TD>{s.carrier_name ?? '—'}</TD>
               <TD>
@@ -671,19 +671,18 @@ type LLMRates = { chatgpt: number; gemini: number; llama: number; claude: number
 const SERVICE_SUBTYPES: Record<string, { id: string; label: string }[]> = {
   // Drayage classified by cargo weight per rate sheet
   drayage: [
-    { id: 'standard',  label: 'Standard (under 43,000 lbs)' },
     { id: 'heavy',     label: 'Heavy (43,000–47,000 lbs)' },
     { id: 'very-heavy',label: 'Very Heavy (47,000–50,000 lbs)' },
     { id: 'overweight',label: 'Overweight (over 50,000 lbs)' },
   ],
   // Transloading classified by container ft + loose cargo by piece count
   transloading: [
-    { id: 'palletized-20ft',       label: 'Palletized – 20ft' },
-    { id: 'palletized-40ft',       label: 'Palletized – 40/45/53ft' },
-    { id: 'loose-20ft-1-500',      label: 'Loose Cargo 20ft (1–500 pcs)' },
-    { id: 'loose-20ft-501-1000',   label: 'Loose Cargo 20ft (501–1,000 pcs)' },
-    { id: 'loose-40ft-1-500',      label: 'Loose Cargo 40/45/53ft (1–500 pcs)' },
-    { id: 'loose-40ft-501-1000',   label: 'Loose Cargo 40/45/53ft (501–1,000 pcs)' },
+    { id: 'palletized-20ft',      label: 'Palletized – 20ft' },
+    { id: 'palletized-40ft',      label: 'Palletized – 40/45/53ft' },
+    { id: 'loose-20ft-500-1000',  label: 'Loose Cargo 20ft (500–1,000 pcs)' },
+    { id: 'loose-20ft-1000plus',  label: 'Loose Cargo 20ft (1,000+ pcs)' },
+    { id: 'loose-40ft-500-1000',  label: 'Loose Cargo 40/45/53ft (500–1,000 pcs)' },
+    { id: 'loose-40ft-1000plus',  label: 'Loose Cargo 40/45/53ft (1,000+ pcs)' },
   ],
   // Last Mile by truck type per rate sheet
   'last-mile': [
@@ -699,7 +698,7 @@ const SERVICE_SUBTYPES: Record<string, { id: string; label: string }[]> = {
   ],
 }
 
-const PRICING_MONTHS = ['Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025']
+const PRICING_MONTHS = ['Oct 2024', 'Nov 2024', 'Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025']
 
 // Static rates: service → subType → portName → [month0…month3]
 // Drayage: all-in rate per container move by weight (base + weight surcharge from rate sheet)
@@ -707,146 +706,138 @@ const PRICING_MONTHS = ['Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025']
 // Last Mile: per-trip rate (50-mile baseline) based on $/mile rate sheet
 const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> = {
   drayage: {
-    // Standard weight (under 43k lbs) — base drayage rate per city
-    'standard': {
-      'LA / LB Port, CA':  [{ chatgpt:482,gemini:490,llama:475,claude:485 },{ chatgpt:488,gemini:496,llama:480,claude:491 },{ chatgpt:495,gemini:504,llama:488,claude:498 },{ chatgpt:502,gemini:512,llama:495,claude:506 }],
-      'Houston Port, TX':  [{ chatgpt:412,gemini:406,llama:418,claude:410 },{ chatgpt:416,gemini:410,llama:422,claude:414 },{ chatgpt:422,gemini:416,llama:428,claude:420 },{ chatgpt:428,gemini:422,llama:435,claude:426 }],
-      'NY / NJ Port, NY':  [{ chatgpt:522,gemini:530,llama:515,claude:526 },{ chatgpt:528,gemini:537,llama:520,claude:532 },{ chatgpt:538,gemini:547,llama:530,claude:542 },{ chatgpt:548,gemini:558,llama:540,claude:553 }],
-      'Savannah Port, GA': [{ chatgpt:362,gemini:368,llama:355,claude:365 },{ chatgpt:366,gemini:372,llama:358,claude:369 },{ chatgpt:372,gemini:379,llama:364,claude:375 },{ chatgpt:378,gemini:386,llama:370,claude:382 }],
-      'Seattle Port, WA':  [{ chatgpt:442,gemini:450,llama:435,claude:446 },{ chatgpt:446,gemini:454,llama:438,claude:450 },{ chatgpt:452,gemini:460,llama:444,claude:456 },{ chatgpt:458,gemini:467,llama:450,claude:462 }],
-    },
-    // Heavy (43k–47k lbs) — base + $250 surcharge per rate sheet
+    // Heavy (43k–47k lbs) — base + $250 surcharge per rate sheet — [Oct,Nov,Dec,Jan,Feb,Mar]
     'heavy': {
-      'LA / LB Port, CA':  [{ chatgpt:732,gemini:742,llama:724,claude:736 },{ chatgpt:738,gemini:748,llama:730,claude:742 },{ chatgpt:746,gemini:756,llama:738,claude:750 },{ chatgpt:754,gemini:765,llama:746,claude:759 }],
-      'Houston Port, TX':  [{ chatgpt:662,gemini:654,llama:670,claude:660 },{ chatgpt:667,gemini:659,llama:675,claude:665 },{ chatgpt:673,gemini:665,llama:681,claude:671 },{ chatgpt:679,gemini:671,llama:688,claude:677 }],
-      'NY / NJ Port, NY':  [{ chatgpt:773,gemini:781,llama:766,claude:777 },{ chatgpt:779,gemini:788,llama:772,claude:783 },{ chatgpt:789,gemini:798,llama:782,claude:793 },{ chatgpt:799,gemini:810,llama:792,claude:804 }],
-      'Savannah Port, GA': [{ chatgpt:612,gemini:619,llama:604,claude:615 },{ chatgpt:617,gemini:624,llama:608,claude:620 },{ chatgpt:623,gemini:630,llama:614,claude:626 },{ chatgpt:629,gemini:637,llama:620,claude:633 }],
-      'Seattle Port, WA':  [{ chatgpt:692,gemini:701,llama:684,claude:697 },{ chatgpt:697,gemini:706,llama:688,claude:702 },{ chatgpt:703,gemini:712,llama:694,claude:708 },{ chatgpt:709,gemini:719,llama:700,claude:714 }],
+      'LA / LB Port, CA':  [{ chatgpt:718,gemini:728,llama:710,claude:722 },{ chatgpt:725,gemini:735,llama:717,claude:729 },{ chatgpt:732,gemini:742,llama:724,claude:736 },{ chatgpt:738,gemini:748,llama:730,claude:742 },{ chatgpt:746,gemini:756,llama:738,claude:750 },{ chatgpt:754,gemini:765,llama:746,claude:759 }],
+      'Houston Port, TX':  [{ chatgpt:648,gemini:640,llama:656,claude:646 },{ chatgpt:655,gemini:647,llama:663,claude:653 },{ chatgpt:662,gemini:654,llama:670,claude:660 },{ chatgpt:667,gemini:659,llama:675,claude:665 },{ chatgpt:673,gemini:665,llama:681,claude:671 },{ chatgpt:679,gemini:671,llama:688,claude:677 }],
+      'NY / NJ Port, NY':  [{ chatgpt:759,gemini:767,llama:752,claude:763 },{ chatgpt:766,gemini:774,llama:759,claude:770 },{ chatgpt:773,gemini:781,llama:766,claude:777 },{ chatgpt:779,gemini:788,llama:772,claude:783 },{ chatgpt:789,gemini:798,llama:782,claude:793 },{ chatgpt:799,gemini:810,llama:792,claude:804 }],
+      'Savannah Port, GA': [{ chatgpt:598,gemini:605,llama:590,claude:601 },{ chatgpt:605,gemini:612,llama:597,claude:608 },{ chatgpt:612,gemini:619,llama:604,claude:615 },{ chatgpt:617,gemini:624,llama:608,claude:620 },{ chatgpt:623,gemini:630,llama:614,claude:626 },{ chatgpt:629,gemini:637,llama:620,claude:633 }],
+      'Seattle Port, WA':  [{ chatgpt:678,gemini:687,llama:670,claude:683 },{ chatgpt:685,gemini:694,llama:677,claude:690 },{ chatgpt:692,gemini:701,llama:684,claude:697 },{ chatgpt:697,gemini:706,llama:688,claude:702 },{ chatgpt:703,gemini:712,llama:694,claude:708 },{ chatgpt:709,gemini:719,llama:700,claude:714 }],
     },
     // Very heavy (47k–50k lbs) — base + $350 surcharge
     'very-heavy': {
-      'LA / LB Port, CA':  [{ chatgpt:832,gemini:843,llama:823,claude:837 },{ chatgpt:839,gemini:850,llama:830,claude:844 },{ chatgpt:847,gemini:858,llama:838,claude:852 },{ chatgpt:855,gemini:867,llama:846,claude:861 }],
-      'Houston Port, TX':  [{ chatgpt:762,gemini:753,llama:771,claude:759 },{ chatgpt:767,gemini:758,llama:776,claude:764 },{ chatgpt:774,gemini:765,llama:783,claude:771 },{ chatgpt:780,gemini:771,llama:790,claude:777 }],
-      'NY / NJ Port, NY':  [{ chatgpt:873,gemini:882,llama:865,claude:878 },{ chatgpt:879,gemini:889,llama:871,claude:884 },{ chatgpt:889,gemini:899,llama:881,claude:894 },{ chatgpt:900,gemini:911,llama:892,claude:906 }],
-      'Savannah Port, GA': [{ chatgpt:712,gemini:720,llama:703,claude:716 },{ chatgpt:717,gemini:725,llama:708,claude:721 },{ chatgpt:723,gemini:731,llama:714,claude:727 },{ chatgpt:729,gemini:738,llama:720,claude:734 }],
-      'Seattle Port, WA':  [{ chatgpt:793,gemini:802,llama:784,claude:798 },{ chatgpt:798,gemini:807,llama:788,claude:803 },{ chatgpt:804,gemini:813,llama:794,claude:809 },{ chatgpt:810,gemini:820,llama:800,claude:816 }],
+      'LA / LB Port, CA':  [{ chatgpt:818,gemini:829,llama:809,claude:823 },{ chatgpt:825,gemini:836,llama:816,claude:830 },{ chatgpt:832,gemini:843,llama:823,claude:837 },{ chatgpt:839,gemini:850,llama:830,claude:844 },{ chatgpt:847,gemini:858,llama:838,claude:852 },{ chatgpt:855,gemini:867,llama:846,claude:861 }],
+      'Houston Port, TX':  [{ chatgpt:748,gemini:739,llama:757,claude:745 },{ chatgpt:755,gemini:746,llama:764,claude:752 },{ chatgpt:762,gemini:753,llama:771,claude:759 },{ chatgpt:767,gemini:758,llama:776,claude:764 },{ chatgpt:774,gemini:765,llama:783,claude:771 },{ chatgpt:780,gemini:771,llama:790,claude:777 }],
+      'NY / NJ Port, NY':  [{ chatgpt:859,gemini:868,llama:851,claude:864 },{ chatgpt:866,gemini:875,llama:858,claude:871 },{ chatgpt:873,gemini:882,llama:865,claude:878 },{ chatgpt:879,gemini:889,llama:871,claude:884 },{ chatgpt:889,gemini:899,llama:881,claude:894 },{ chatgpt:900,gemini:911,llama:892,claude:906 }],
+      'Savannah Port, GA': [{ chatgpt:698,gemini:706,llama:689,claude:702 },{ chatgpt:705,gemini:713,llama:696,claude:709 },{ chatgpt:712,gemini:720,llama:703,claude:716 },{ chatgpt:717,gemini:725,llama:708,claude:721 },{ chatgpt:723,gemini:731,llama:714,claude:727 },{ chatgpt:729,gemini:738,llama:720,claude:734 }],
+      'Seattle Port, WA':  [{ chatgpt:779,gemini:788,llama:770,claude:784 },{ chatgpt:786,gemini:795,llama:777,claude:791 },{ chatgpt:793,gemini:802,llama:784,claude:798 },{ chatgpt:798,gemini:807,llama:788,claude:803 },{ chatgpt:804,gemini:813,llama:794,claude:809 },{ chatgpt:810,gemini:820,llama:800,claude:816 }],
     },
     // Overweight (over 50k lbs) — base + $400 surcharge
     'overweight': {
-      'LA / LB Port, CA':  [{ chatgpt:882,gemini:894,llama:872,claude:887 },{ chatgpt:889,gemini:901,llama:879,claude:894 },{ chatgpt:897,gemini:909,llama:887,claude:902 },{ chatgpt:906,gemini:919,llama:895,claude:912 }],
-      'Houston Port, TX':  [{ chatgpt:812,gemini:802,llama:822,claude:809 },{ chatgpt:817,gemini:807,llama:827,claude:814 },{ chatgpt:823,gemini:813,llama:834,claude:820 },{ chatgpt:830,gemini:820,llama:841,claude:827 }],
-      'NY / NJ Port, NY':  [{ chatgpt:922,gemini:932,llama:913,claude:927 },{ chatgpt:929,gemini:939,llama:919,claude:934 },{ chatgpt:939,gemini:950,llama:929,claude:944 },{ chatgpt:950,gemini:962,llama:940,claude:956 }],
-      'Savannah Port, GA': [{ chatgpt:762,gemini:771,llama:752,claude:766 },{ chatgpt:767,gemini:776,llama:757,claude:771 },{ chatgpt:773,gemini:782,llama:763,claude:777 },{ chatgpt:780,gemini:790,llama:770,claude:785 }],
-      'Seattle Port, WA':  [{ chatgpt:843,gemini:853,llama:833,claude:848 },{ chatgpt:848,gemini:858,llama:838,claude:853 },{ chatgpt:854,gemini:865,llama:844,claude:860 },{ chatgpt:861,gemini:872,llama:851,claude:867 }],
+      'LA / LB Port, CA':  [{ chatgpt:868,gemini:880,llama:858,claude:873 },{ chatgpt:875,gemini:887,llama:865,claude:880 },{ chatgpt:882,gemini:894,llama:872,claude:887 },{ chatgpt:889,gemini:901,llama:879,claude:894 },{ chatgpt:897,gemini:909,llama:887,claude:902 },{ chatgpt:906,gemini:919,llama:895,claude:912 }],
+      'Houston Port, TX':  [{ chatgpt:798,gemini:788,llama:808,claude:795 },{ chatgpt:805,gemini:795,llama:815,claude:802 },{ chatgpt:812,gemini:802,llama:822,claude:809 },{ chatgpt:817,gemini:807,llama:827,claude:814 },{ chatgpt:823,gemini:813,llama:834,claude:820 },{ chatgpt:830,gemini:820,llama:841,claude:827 }],
+      'NY / NJ Port, NY':  [{ chatgpt:908,gemini:918,llama:899,claude:913 },{ chatgpt:915,gemini:925,llama:906,claude:920 },{ chatgpt:922,gemini:932,llama:913,claude:927 },{ chatgpt:929,gemini:939,llama:919,claude:934 },{ chatgpt:939,gemini:950,llama:929,claude:944 },{ chatgpt:950,gemini:962,llama:940,claude:956 }],
+      'Savannah Port, GA': [{ chatgpt:748,gemini:757,llama:738,claude:752 },{ chatgpt:755,gemini:764,llama:745,claude:759 },{ chatgpt:762,gemini:771,llama:752,claude:766 },{ chatgpt:767,gemini:776,llama:757,claude:771 },{ chatgpt:773,gemini:782,llama:763,claude:777 },{ chatgpt:780,gemini:790,llama:770,claude:785 }],
+      'Seattle Port, WA':  [{ chatgpt:829,gemini:839,llama:819,claude:834 },{ chatgpt:836,gemini:846,llama:826,claude:841 },{ chatgpt:843,gemini:853,llama:833,claude:848 },{ chatgpt:848,gemini:858,llama:838,claude:853 },{ chatgpt:854,gemini:865,llama:844,claude:860 },{ chatgpt:861,gemini:872,llama:851,claude:867 }],
     },
   },
   transloading: {
-    // Palletized 20ft — $235 base per rate sheet
+    // Palletized 20ft — $235 base per rate sheet — [Oct,Nov,Dec,Jan,Feb,Mar]
     'palletized-20ft': {
-      'LA / LB Port, CA':  [{ chatgpt:238,gemini:242,llama:234,claude:240 },{ chatgpt:240,gemini:244,llama:236,claude:242 },{ chatgpt:242,gemini:247,llama:238,claude:244 },{ chatgpt:245,gemini:250,llama:240,claude:247 }],
-      'Houston Port, TX':  [{ chatgpt:228,gemini:232,llama:224,claude:230 },{ chatgpt:230,gemini:234,llama:226,claude:232 },{ chatgpt:232,gemini:236,llama:228,claude:234 },{ chatgpt:235,gemini:239,llama:231,claude:237 }],
-      'NY / NJ Port, NY':  [{ chatgpt:244,gemini:249,llama:240,claude:246 },{ chatgpt:246,gemini:251,llama:242,claude:248 },{ chatgpt:249,gemini:254,llama:245,claude:251 },{ chatgpt:252,gemini:258,llama:248,claude:254 }],
-      'Savannah Port, GA': [{ chatgpt:222,gemini:226,llama:218,claude:224 },{ chatgpt:224,gemini:228,llama:220,claude:226 },{ chatgpt:226,gemini:230,llama:222,claude:228 },{ chatgpt:228,gemini:233,llama:224,claude:230 }],
+      'LA / LB Port, CA':  [{ chatgpt:232,gemini:236,llama:228,claude:234 },{ chatgpt:235,gemini:239,llama:231,claude:237 },{ chatgpt:238,gemini:242,llama:234,claude:240 },{ chatgpt:240,gemini:244,llama:236,claude:242 },{ chatgpt:242,gemini:247,llama:238,claude:244 },{ chatgpt:245,gemini:250,llama:240,claude:247 }],
+      'Houston Port, TX':  [{ chatgpt:222,gemini:226,llama:218,claude:224 },{ chatgpt:225,gemini:229,llama:221,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:230 },{ chatgpt:230,gemini:234,llama:226,claude:232 },{ chatgpt:232,gemini:236,llama:228,claude:234 },{ chatgpt:235,gemini:239,llama:231,claude:237 }],
+      'NY / NJ Port, NY':  [{ chatgpt:238,gemini:243,llama:234,claude:240 },{ chatgpt:241,gemini:246,llama:237,claude:243 },{ chatgpt:244,gemini:249,llama:240,claude:246 },{ chatgpt:246,gemini:251,llama:242,claude:248 },{ chatgpt:249,gemini:254,llama:245,claude:251 },{ chatgpt:252,gemini:258,llama:248,claude:254 }],
+      'Savannah Port, GA': [{ chatgpt:216,gemini:220,llama:212,claude:218 },{ chatgpt:219,gemini:223,llama:215,claude:221 },{ chatgpt:222,gemini:226,llama:218,claude:224 },{ chatgpt:224,gemini:228,llama:220,claude:226 },{ chatgpt:226,gemini:230,llama:222,claude:228 },{ chatgpt:228,gemini:233,llama:224,claude:230 }],
     },
     // Palletized 40/45/53ft — $335 base per rate sheet
     'palletized-40ft': {
-      'LA / LB Port, CA':  [{ chatgpt:338,gemini:344,llama:332,claude:340 },{ chatgpt:341,gemini:347,llama:335,claude:343 },{ chatgpt:345,gemini:351,llama:339,claude:347 },{ chatgpt:349,gemini:355,llama:343,claude:351 }],
-      'Houston Port, TX':  [{ chatgpt:324,gemini:330,llama:318,claude:326 },{ chatgpt:327,gemini:333,llama:321,claude:329 },{ chatgpt:330,gemini:336,llama:324,claude:332 },{ chatgpt:333,gemini:339,llama:327,claude:335 }],
-      'NY / NJ Port, NY':  [{ chatgpt:344,gemini:350,llama:338,claude:346 },{ chatgpt:347,gemini:353,llama:341,claude:349 },{ chatgpt:351,gemini:357,llama:345,claude:353 },{ chatgpt:355,gemini:362,llama:349,claude:358 }],
-      'Savannah Port, GA': [{ chatgpt:318,gemini:324,llama:312,claude:320 },{ chatgpt:321,gemini:327,llama:315,claude:323 },{ chatgpt:324,gemini:330,llama:318,claude:326 },{ chatgpt:327,gemini:333,llama:321,claude:329 }],
+      'LA / LB Port, CA':  [{ chatgpt:330,gemini:336,llama:324,claude:332 },{ chatgpt:334,gemini:340,llama:328,claude:336 },{ chatgpt:338,gemini:344,llama:332,claude:340 },{ chatgpt:341,gemini:347,llama:335,claude:343 },{ chatgpt:345,gemini:351,llama:339,claude:347 },{ chatgpt:349,gemini:355,llama:343,claude:351 }],
+      'Houston Port, TX':  [{ chatgpt:316,gemini:322,llama:310,claude:318 },{ chatgpt:320,gemini:326,llama:314,claude:322 },{ chatgpt:324,gemini:330,llama:318,claude:326 },{ chatgpt:327,gemini:333,llama:321,claude:329 },{ chatgpt:330,gemini:336,llama:324,claude:332 },{ chatgpt:333,gemini:339,llama:327,claude:335 }],
+      'NY / NJ Port, NY':  [{ chatgpt:336,gemini:342,llama:330,claude:338 },{ chatgpt:340,gemini:346,llama:334,claude:342 },{ chatgpt:344,gemini:350,llama:338,claude:346 },{ chatgpt:347,gemini:353,llama:341,claude:349 },{ chatgpt:351,gemini:357,llama:345,claude:353 },{ chatgpt:355,gemini:362,llama:349,claude:358 }],
+      'Savannah Port, GA': [{ chatgpt:310,gemini:316,llama:304,claude:312 },{ chatgpt:314,gemini:320,llama:308,claude:316 },{ chatgpt:318,gemini:324,llama:312,claude:320 },{ chatgpt:321,gemini:327,llama:315,claude:323 },{ chatgpt:324,gemini:330,llama:318,claude:326 },{ chatgpt:327,gemini:333,llama:321,claude:329 }],
     },
-    // Loose cargo 20ft 1-500 pcs — $170 base
-    'loose-20ft-1-500': {
-      'LA / LB Port, CA':  [{ chatgpt:172,gemini:175,llama:169,claude:173 },{ chatgpt:173,gemini:176,llama:170,claude:174 },{ chatgpt:175,gemini:178,llama:172,claude:176 },{ chatgpt:177,gemini:180,llama:174,claude:178 }],
-      'Houston Port, TX':  [{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:166,gemini:169,llama:163,claude:167 },{ chatgpt:168,gemini:171,llama:165,claude:169 },{ chatgpt:170,gemini:173,llama:167,claude:171 }],
-      'NY / NJ Port, NY':  [{ chatgpt:176,gemini:179,llama:173,claude:177 },{ chatgpt:178,gemini:181,llama:175,claude:179 },{ chatgpt:180,gemini:183,llama:177,claude:181 },{ chatgpt:182,gemini:185,llama:179,claude:183 }],
-      'Savannah Port, GA': [{ chatgpt:162,gemini:165,llama:159,claude:163 },{ chatgpt:163,gemini:166,llama:160,claude:164 },{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:167,gemini:170,llama:164,claude:168 }],
+    // Loose cargo 20ft 500-1000 pcs — $170 base
+    'loose-20ft-500-1000': {
+      'LA / LB Port, CA':  [{ chatgpt:166,gemini:169,llama:163,claude:167 },{ chatgpt:169,gemini:172,llama:166,claude:170 },{ chatgpt:172,gemini:175,llama:169,claude:173 },{ chatgpt:173,gemini:176,llama:170,claude:174 },{ chatgpt:175,gemini:178,llama:172,claude:176 },{ chatgpt:177,gemini:180,llama:174,claude:178 }],
+      'Houston Port, TX':  [{ chatgpt:159,gemini:162,llama:156,claude:160 },{ chatgpt:162,gemini:165,llama:159,claude:163 },{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:166,gemini:169,llama:163,claude:167 },{ chatgpt:168,gemini:171,llama:165,claude:169 },{ chatgpt:170,gemini:173,llama:167,claude:171 }],
+      'NY / NJ Port, NY':  [{ chatgpt:170,gemini:173,llama:167,claude:171 },{ chatgpt:173,gemini:176,llama:170,claude:174 },{ chatgpt:176,gemini:179,llama:173,claude:177 },{ chatgpt:178,gemini:181,llama:175,claude:179 },{ chatgpt:180,gemini:183,llama:177,claude:181 },{ chatgpt:182,gemini:185,llama:179,claude:183 }],
+      'Savannah Port, GA': [{ chatgpt:156,gemini:159,llama:153,claude:157 },{ chatgpt:159,gemini:162,llama:156,claude:160 },{ chatgpt:162,gemini:165,llama:159,claude:163 },{ chatgpt:163,gemini:166,llama:160,claude:164 },{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:167,gemini:170,llama:164,claude:168 }],
     },
-    // Loose cargo 20ft 501-1000 pcs — $230 base
-    'loose-20ft-501-1000': {
-      'LA / LB Port, CA':  [{ chatgpt:233,gemini:237,llama:229,claude:234 },{ chatgpt:235,gemini:239,llama:231,claude:236 },{ chatgpt:238,gemini:242,llama:234,claude:239 },{ chatgpt:241,gemini:245,llama:237,claude:242 }],
-      'Houston Port, TX':  [{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 },{ chatgpt:230,gemini:234,llama:226,claude:231 }],
-      'NY / NJ Port, NY':  [{ chatgpt:238,gemini:242,llama:234,claude:239 },{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:243,gemini:247,llama:239,claude:244 },{ chatgpt:246,gemini:250,llama:242,claude:247 }],
-      'Savannah Port, GA': [{ chatgpt:220,gemini:224,llama:216,claude:221 },{ chatgpt:222,gemini:226,llama:218,claude:223 },{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 }],
+    // Loose cargo 20ft 1000+ pcs — $230 base
+    'loose-20ft-1000plus': {
+      'LA / LB Port, CA':  [{ chatgpt:225,gemini:229,llama:221,claude:226 },{ chatgpt:229,gemini:233,llama:225,claude:230 },{ chatgpt:233,gemini:237,llama:229,claude:234 },{ chatgpt:235,gemini:239,llama:231,claude:236 },{ chatgpt:238,gemini:242,llama:234,claude:239 },{ chatgpt:241,gemini:245,llama:237,claude:242 }],
+      'Houston Port, TX':  [{ chatgpt:216,gemini:220,llama:212,claude:217 },{ chatgpt:220,gemini:224,llama:216,claude:221 },{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 },{ chatgpt:230,gemini:234,llama:226,claude:231 }],
+      'NY / NJ Port, NY':  [{ chatgpt:230,gemini:234,llama:226,claude:231 },{ chatgpt:234,gemini:238,llama:230,claude:235 },{ chatgpt:238,gemini:242,llama:234,claude:239 },{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:243,gemini:247,llama:239,claude:244 },{ chatgpt:246,gemini:250,llama:242,claude:247 }],
+      'Savannah Port, GA': [{ chatgpt:212,gemini:216,llama:208,claude:213 },{ chatgpt:216,gemini:220,llama:212,claude:217 },{ chatgpt:220,gemini:224,llama:216,claude:221 },{ chatgpt:222,gemini:226,llama:218,claude:223 },{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 }],
     },
-    // Loose cargo 40/45/53ft 1-500 pcs — $170 base (same charge as 20ft per rate sheet)
-    'loose-40ft-1-500': {
-      'LA / LB Port, CA':  [{ chatgpt:174,gemini:177,llama:171,claude:175 },{ chatgpt:175,gemini:178,llama:172,claude:176 },{ chatgpt:177,gemini:180,llama:174,claude:178 },{ chatgpt:179,gemini:182,llama:176,claude:180 }],
-      'Houston Port, TX':  [{ chatgpt:167,gemini:170,llama:164,claude:168 },{ chatgpt:168,gemini:171,llama:165,claude:169 },{ chatgpt:170,gemini:173,llama:167,claude:171 },{ chatgpt:172,gemini:175,llama:169,claude:173 }],
-      'NY / NJ Port, NY':  [{ chatgpt:178,gemini:181,llama:175,claude:179 },{ chatgpt:180,gemini:183,llama:177,claude:181 },{ chatgpt:182,gemini:185,llama:179,claude:183 },{ chatgpt:184,gemini:187,llama:181,claude:185 }],
-      'Savannah Port, GA': [{ chatgpt:164,gemini:167,llama:161,claude:165 },{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:167,gemini:170,llama:164,claude:168 },{ chatgpt:169,gemini:172,llama:166,claude:170 }],
+    // Loose cargo 40/45/53ft 500-1000 pcs — $170 base
+    'loose-40ft-500-1000': {
+      'LA / LB Port, CA':  [{ chatgpt:168,gemini:171,llama:165,claude:169 },{ chatgpt:171,gemini:174,llama:168,claude:172 },{ chatgpt:174,gemini:177,llama:171,claude:175 },{ chatgpt:175,gemini:178,llama:172,claude:176 },{ chatgpt:177,gemini:180,llama:174,claude:178 },{ chatgpt:179,gemini:182,llama:176,claude:180 }],
+      'Houston Port, TX':  [{ chatgpt:161,gemini:164,llama:158,claude:162 },{ chatgpt:164,gemini:167,llama:161,claude:165 },{ chatgpt:167,gemini:170,llama:164,claude:168 },{ chatgpt:168,gemini:171,llama:165,claude:169 },{ chatgpt:170,gemini:173,llama:167,claude:171 },{ chatgpt:172,gemini:175,llama:169,claude:173 }],
+      'NY / NJ Port, NY':  [{ chatgpt:172,gemini:175,llama:169,claude:173 },{ chatgpt:175,gemini:178,llama:172,claude:176 },{ chatgpt:178,gemini:181,llama:175,claude:179 },{ chatgpt:180,gemini:183,llama:177,claude:181 },{ chatgpt:182,gemini:185,llama:179,claude:183 },{ chatgpt:184,gemini:187,llama:181,claude:185 }],
+      'Savannah Port, GA': [{ chatgpt:158,gemini:161,llama:155,claude:159 },{ chatgpt:161,gemini:164,llama:158,claude:162 },{ chatgpt:164,gemini:167,llama:161,claude:165 },{ chatgpt:165,gemini:168,llama:162,claude:166 },{ chatgpt:167,gemini:170,llama:164,claude:168 },{ chatgpt:169,gemini:172,llama:166,claude:170 }],
     },
-    // Loose cargo 40/45/53ft 501-1000 pcs — $230 base
-    'loose-40ft-501-1000': {
-      'LA / LB Port, CA':  [{ chatgpt:235,gemini:239,llama:231,claude:236 },{ chatgpt:237,gemini:241,llama:233,claude:238 },{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:243,gemini:247,llama:239,claude:244 }],
-      'Houston Port, TX':  [{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 },{ chatgpt:230,gemini:234,llama:226,claude:231 },{ chatgpt:232,gemini:236,llama:228,claude:233 }],
-      'NY / NJ Port, NY':  [{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:242,gemini:246,llama:238,claude:243 },{ chatgpt:245,gemini:249,llama:241,claude:246 },{ chatgpt:248,gemini:252,llama:244,claude:249 }],
-      'Savannah Port, GA': [{ chatgpt:222,gemini:226,llama:218,claude:223 },{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 }],
+    // Loose cargo 40/45/53ft 1000+ pcs — $230 base
+    'loose-40ft-1000plus': {
+      'LA / LB Port, CA':  [{ chatgpt:227,gemini:231,llama:223,claude:228 },{ chatgpt:231,gemini:235,llama:227,claude:232 },{ chatgpt:235,gemini:239,llama:231,claude:236 },{ chatgpt:237,gemini:241,llama:233,claude:238 },{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:243,gemini:247,llama:239,claude:244 }],
+      'Houston Port, TX':  [{ chatgpt:218,gemini:222,llama:214,claude:219 },{ chatgpt:222,gemini:226,llama:218,claude:223 },{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 },{ chatgpt:230,gemini:234,llama:226,claude:231 },{ chatgpt:232,gemini:236,llama:228,claude:233 }],
+      'NY / NJ Port, NY':  [{ chatgpt:232,gemini:236,llama:228,claude:233 },{ chatgpt:236,gemini:240,llama:232,claude:237 },{ chatgpt:240,gemini:244,llama:236,claude:241 },{ chatgpt:242,gemini:246,llama:238,claude:243 },{ chatgpt:245,gemini:249,llama:241,claude:246 },{ chatgpt:248,gemini:252,llama:244,claude:249 }],
+      'Savannah Port, GA': [{ chatgpt:214,gemini:218,llama:210,claude:215 },{ chatgpt:218,gemini:222,llama:214,claude:219 },{ chatgpt:222,gemini:226,llama:218,claude:223 },{ chatgpt:224,gemini:228,llama:220,claude:225 },{ chatgpt:226,gemini:230,llama:222,claude:227 },{ chatgpt:228,gemini:232,llama:224,claude:229 }],
     },
   },
   'last-mile': {
-    // Light Truck (Sprinter/Box <12ft) — $1.25/mi × 50mi baseline + loading/admin
+    // Light Truck (Sprinter/Box <12ft) — $1.25/mi × 50mi baseline — [Oct,Nov,Dec,Jan,Feb,Mar]
     'light-truck': {
-      'LA Basin, CA':       [{ chatgpt:178,gemini:185,llama:172,claude:180 },{ chatgpt:180,gemini:187,llama:174,claude:182 },{ chatgpt:183,gemini:190,llama:177,claude:185 },{ chatgpt:186,gemini:193,llama:180,claude:188 }],
-      'Houston Metro, TX':  [{ chatgpt:152,gemini:158,llama:147,claude:154 },{ chatgpt:154,gemini:160,llama:149,claude:156 },{ chatgpt:156,gemini:162,llama:151,claude:158 },{ chatgpt:158,gemini:164,llama:153,claude:160 }],
-      'NYC Metro, NY':      [{ chatgpt:198,gemini:205,llama:192,claude:200 },{ chatgpt:200,gemini:207,llama:194,claude:202 },{ chatgpt:203,gemini:210,llama:197,claude:205 },{ chatgpt:206,gemini:213,llama:200,claude:208 }],
-      'Atlanta Metro, GA':  [{ chatgpt:144,gemini:150,llama:139,claude:146 },{ chatgpt:146,gemini:152,llama:141,claude:148 },{ chatgpt:148,gemini:154,llama:143,claude:150 },{ chatgpt:150,gemini:156,llama:145,claude:152 }],
+      'LA Basin, CA':       [{ chatgpt:171,gemini:178,llama:165,claude:173 },{ chatgpt:174,gemini:181,llama:168,claude:176 },{ chatgpt:178,gemini:185,llama:172,claude:180 },{ chatgpt:180,gemini:187,llama:174,claude:182 },{ chatgpt:183,gemini:190,llama:177,claude:185 },{ chatgpt:186,gemini:193,llama:180,claude:188 }],
+      'Houston Metro, TX':  [{ chatgpt:145,gemini:151,llama:140,claude:147 },{ chatgpt:148,gemini:154,llama:143,claude:150 },{ chatgpt:152,gemini:158,llama:147,claude:154 },{ chatgpt:154,gemini:160,llama:149,claude:156 },{ chatgpt:156,gemini:162,llama:151,claude:158 },{ chatgpt:158,gemini:164,llama:153,claude:160 }],
+      'NYC Metro, NY':      [{ chatgpt:191,gemini:198,llama:185,claude:193 },{ chatgpt:194,gemini:201,llama:188,claude:196 },{ chatgpt:198,gemini:205,llama:192,claude:200 },{ chatgpt:200,gemini:207,llama:194,claude:202 },{ chatgpt:203,gemini:210,llama:197,claude:205 },{ chatgpt:206,gemini:213,llama:200,claude:208 }],
+      'Atlanta Metro, GA':  [{ chatgpt:137,gemini:143,llama:132,claude:139 },{ chatgpt:140,gemini:146,llama:135,claude:142 },{ chatgpt:144,gemini:150,llama:139,claude:146 },{ chatgpt:146,gemini:152,llama:141,claude:148 },{ chatgpt:148,gemini:154,llama:143,claude:150 },{ chatgpt:150,gemini:156,llama:145,claude:152 }],
     },
     // Medium Truck (Straight 20-26ft) — $1.75/mi baseline
     'medium-truck': {
-      'LA Basin, CA':       [{ chatgpt:248,gemini:258,llama:240,claude:252 },{ chatgpt:251,gemini:261,llama:243,claude:255 },{ chatgpt:255,gemini:265,llama:247,claude:259 },{ chatgpt:259,gemini:269,llama:251,claude:263 }],
-      'Houston Metro, TX':  [{ chatgpt:212,gemini:220,llama:205,claude:215 },{ chatgpt:214,gemini:222,llama:207,claude:217 },{ chatgpt:217,gemini:225,llama:210,claude:220 },{ chatgpt:220,gemini:228,llama:213,claude:223 }],
-      'NYC Metro, NY':      [{ chatgpt:274,gemini:284,llama:266,claude:278 },{ chatgpt:277,gemini:287,llama:269,claude:281 },{ chatgpt:281,gemini:291,llama:273,claude:285 },{ chatgpt:285,gemini:296,llama:277,claude:289 }],
-      'Atlanta Metro, GA':  [{ chatgpt:198,gemini:206,llama:192,claude:201 },{ chatgpt:200,gemini:208,llama:194,claude:203 },{ chatgpt:203,gemini:211,llama:197,claude:206 },{ chatgpt:206,gemini:214,llama:200,claude:209 }],
+      'LA Basin, CA':       [{ chatgpt:240,gemini:250,llama:232,claude:244 },{ chatgpt:244,gemini:254,llama:236,claude:248 },{ chatgpt:248,gemini:258,llama:240,claude:252 },{ chatgpt:251,gemini:261,llama:243,claude:255 },{ chatgpt:255,gemini:265,llama:247,claude:259 },{ chatgpt:259,gemini:269,llama:251,claude:263 }],
+      'Houston Metro, TX':  [{ chatgpt:204,gemini:212,llama:197,claude:207 },{ chatgpt:208,gemini:216,llama:201,claude:211 },{ chatgpt:212,gemini:220,llama:205,claude:215 },{ chatgpt:214,gemini:222,llama:207,claude:217 },{ chatgpt:217,gemini:225,llama:210,claude:220 },{ chatgpt:220,gemini:228,llama:213,claude:223 }],
+      'NYC Metro, NY':      [{ chatgpt:266,gemini:276,llama:258,claude:270 },{ chatgpt:270,gemini:280,llama:262,claude:274 },{ chatgpt:274,gemini:284,llama:266,claude:278 },{ chatgpt:277,gemini:287,llama:269,claude:281 },{ chatgpt:281,gemini:291,llama:273,claude:285 },{ chatgpt:285,gemini:296,llama:277,claude:289 }],
+      'Atlanta Metro, GA':  [{ chatgpt:190,gemini:198,llama:184,claude:193 },{ chatgpt:194,gemini:202,llama:188,claude:197 },{ chatgpt:198,gemini:206,llama:192,claude:201 },{ chatgpt:200,gemini:208,llama:194,claude:203 },{ chatgpt:203,gemini:211,llama:197,claude:206 },{ chatgpt:206,gemini:214,llama:200,claude:209 }],
     },
     // Heavy Truck (Semi 40-53ft) — $2.25/mi baseline
     'heavy-truck': {
-      'LA Basin, CA':       [{ chatgpt:320,gemini:332,llama:310,claude:324 },{ chatgpt:324,gemini:336,llama:314,claude:328 },{ chatgpt:329,gemini:341,llama:319,claude:333 },{ chatgpt:334,gemini:347,llama:324,claude:338 }],
-      'Houston Metro, TX':  [{ chatgpt:272,gemini:282,llama:264,claude:276 },{ chatgpt:275,gemini:285,llama:267,claude:279 },{ chatgpt:279,gemini:289,llama:271,claude:283 },{ chatgpt:283,gemini:293,llama:275,claude:287 }],
-      'NYC Metro, NY':      [{ chatgpt:353,gemini:366,llama:342,claude:358 },{ chatgpt:357,gemini:370,llama:346,claude:362 },{ chatgpt:362,gemini:375,llama:351,claude:367 },{ chatgpt:367,gemini:381,llama:356,claude:372 }],
-      'Atlanta Metro, GA':  [{ chatgpt:256,gemini:266,llama:248,claude:260 },{ chatgpt:259,gemini:269,llama:251,claude:263 },{ chatgpt:263,gemini:273,llama:255,claude:267 },{ chatgpt:267,gemini:277,llama:259,claude:271 }],
+      'LA Basin, CA':       [{ chatgpt:311,gemini:323,llama:301,claude:315 },{ chatgpt:315,gemini:327,llama:305,claude:319 },{ chatgpt:320,gemini:332,llama:310,claude:324 },{ chatgpt:324,gemini:336,llama:314,claude:328 },{ chatgpt:329,gemini:341,llama:319,claude:333 },{ chatgpt:334,gemini:347,llama:324,claude:338 }],
+      'Houston Metro, TX':  [{ chatgpt:263,gemini:273,llama:255,claude:267 },{ chatgpt:267,gemini:277,llama:259,claude:271 },{ chatgpt:272,gemini:282,llama:264,claude:276 },{ chatgpt:275,gemini:285,llama:267,claude:279 },{ chatgpt:279,gemini:289,llama:271,claude:283 },{ chatgpt:283,gemini:293,llama:275,claude:287 }],
+      'NYC Metro, NY':      [{ chatgpt:344,gemini:357,llama:333,claude:349 },{ chatgpt:348,gemini:361,llama:337,claude:353 },{ chatgpt:353,gemini:366,llama:342,claude:358 },{ chatgpt:357,gemini:370,llama:346,claude:362 },{ chatgpt:362,gemini:375,llama:351,claude:367 },{ chatgpt:367,gemini:381,llama:356,claude:372 }],
+      'Atlanta Metro, GA':  [{ chatgpt:247,gemini:257,llama:239,claude:251 },{ chatgpt:251,gemini:261,llama:243,claude:255 },{ chatgpt:256,gemini:266,llama:248,claude:260 },{ chatgpt:259,gemini:269,llama:251,claude:263 },{ chatgpt:263,gemini:273,llama:255,claude:267 },{ chatgpt:267,gemini:277,llama:259,claude:271 }],
     },
     // Flatbed — $2.75/mi baseline
     'flatbed': {
-      'LA Basin, CA':       [{ chatgpt:390,gemini:405,llama:378,claude:395 },{ chatgpt:395,gemini:410,llama:383,claude:400 },{ chatgpt:401,gemini:416,llama:389,claude:406 },{ chatgpt:407,gemini:422,llama:395,claude:412 }],
-      'Houston Metro, TX':  [{ chatgpt:332,gemini:344,llama:321,claude:337 },{ chatgpt:336,gemini:348,llama:325,claude:341 },{ chatgpt:340,gemini:352,llama:329,claude:345 },{ chatgpt:344,gemini:357,llama:333,claude:349 }],
-      'NYC Metro, NY':      [{ chatgpt:430,gemini:446,llama:417,claude:436 },{ chatgpt:435,gemini:451,llama:422,claude:441 },{ chatgpt:441,gemini:457,llama:428,claude:447 },{ chatgpt:447,gemini:464,llama:434,claude:453 }],
-      'Atlanta Metro, GA':  [{ chatgpt:312,gemini:324,llama:302,claude:317 },{ chatgpt:315,gemini:327,llama:305,claude:320 },{ chatgpt:319,gemini:331,llama:309,claude:324 },{ chatgpt:323,gemini:335,llama:313,claude:328 }],
+      'LA Basin, CA':       [{ chatgpt:380,gemini:395,llama:368,claude:385 },{ chatgpt:385,gemini:400,llama:373,claude:390 },{ chatgpt:390,gemini:405,llama:378,claude:395 },{ chatgpt:395,gemini:410,llama:383,claude:400 },{ chatgpt:401,gemini:416,llama:389,claude:406 },{ chatgpt:407,gemini:422,llama:395,claude:412 }],
+      'Houston Metro, TX':  [{ chatgpt:322,gemini:334,llama:311,claude:327 },{ chatgpt:327,gemini:339,llama:316,claude:332 },{ chatgpt:332,gemini:344,llama:321,claude:337 },{ chatgpt:336,gemini:348,llama:325,claude:341 },{ chatgpt:340,gemini:352,llama:329,claude:345 },{ chatgpt:344,gemini:357,llama:333,claude:349 }],
+      'NYC Metro, NY':      [{ chatgpt:420,gemini:436,llama:407,claude:426 },{ chatgpt:425,gemini:441,llama:412,claude:431 },{ chatgpt:430,gemini:446,llama:417,claude:436 },{ chatgpt:435,gemini:451,llama:422,claude:441 },{ chatgpt:441,gemini:457,llama:428,claude:447 },{ chatgpt:447,gemini:464,llama:434,claude:453 }],
+      'Atlanta Metro, GA':  [{ chatgpt:302,gemini:314,llama:292,claude:307 },{ chatgpt:307,gemini:319,llama:297,claude:312 },{ chatgpt:312,gemini:324,llama:302,claude:317 },{ chatgpt:315,gemini:327,llama:305,claude:320 },{ chatgpt:319,gemini:331,llama:309,claude:324 },{ chatgpt:323,gemini:335,llama:313,claude:328 }],
     },
-    // Reefer (Temp Controlled) — Light Truck base + $0.30/mi + 50% insurance premium
+    // Reefer (Temp Controlled) — Light Truck base + $0.30/mi
     'reefer': {
-      'LA Basin, CA':       [{ chatgpt:224,gemini:232,llama:217,claude:227 },{ chatgpt:227,gemini:235,llama:220,claude:230 },{ chatgpt:230,gemini:238,llama:223,claude:233 },{ chatgpt:233,gemini:241,llama:226,claude:236 }],
-      'Houston Metro, TX':  [{ chatgpt:192,gemini:199,llama:186,claude:195 },{ chatgpt:194,gemini:201,llama:188,claude:197 },{ chatgpt:197,gemini:204,llama:191,claude:200 },{ chatgpt:200,gemini:207,llama:194,claude:203 }],
-      'NYC Metro, NY':      [{ chatgpt:248,gemini:257,llama:241,claude:252 },{ chatgpt:251,gemini:260,llama:244,claude:255 },{ chatgpt:255,gemini:264,llama:248,claude:259 },{ chatgpt:259,gemini:268,llama:252,claude:263 }],
-      'Atlanta Metro, GA':  [{ chatgpt:182,gemini:189,llama:176,claude:185 },{ chatgpt:184,gemini:191,llama:178,claude:187 },{ chatgpt:187,gemini:194,llama:181,claude:190 },{ chatgpt:190,gemini:197,llama:184,claude:193 }],
+      'LA Basin, CA':       [{ chatgpt:217,gemini:225,llama:210,claude:220 },{ chatgpt:220,gemini:228,llama:213,claude:223 },{ chatgpt:224,gemini:232,llama:217,claude:227 },{ chatgpt:227,gemini:235,llama:220,claude:230 },{ chatgpt:230,gemini:238,llama:223,claude:233 },{ chatgpt:233,gemini:241,llama:226,claude:236 }],
+      'Houston Metro, TX':  [{ chatgpt:185,gemini:192,llama:179,claude:188 },{ chatgpt:188,gemini:195,llama:182,claude:191 },{ chatgpt:192,gemini:199,llama:186,claude:195 },{ chatgpt:194,gemini:201,llama:188,claude:197 },{ chatgpt:197,gemini:204,llama:191,claude:200 },{ chatgpt:200,gemini:207,llama:194,claude:203 }],
+      'NYC Metro, NY':      [{ chatgpt:241,gemini:250,llama:234,claude:245 },{ chatgpt:244,gemini:253,llama:237,claude:248 },{ chatgpt:248,gemini:257,llama:241,claude:252 },{ chatgpt:251,gemini:260,llama:244,claude:255 },{ chatgpt:255,gemini:264,llama:248,claude:259 },{ chatgpt:259,gemini:268,llama:252,claude:263 }],
+      'Atlanta Metro, GA':  [{ chatgpt:175,gemini:182,llama:169,claude:178 },{ chatgpt:178,gemini:185,llama:172,claude:181 },{ chatgpt:182,gemini:189,llama:176,claude:185 },{ chatgpt:184,gemini:191,llama:178,claude:187 },{ chatgpt:187,gemini:194,llama:181,claude:190 },{ chatgpt:190,gemini:197,llama:184,claude:193 }],
     },
-    // Hazmat — Medium Truck base + 20% all categories
+    // Hazmat — Medium Truck base + 20%
     'hazmat': {
-      'LA Basin, CA':       [{ chatgpt:298,gemini:310,llama:288,claude:302 },{ chatgpt:301,gemini:313,llama:291,claude:305 },{ chatgpt:306,gemini:318,llama:296,claude:310 },{ chatgpt:311,gemini:323,llama:301,claude:315 }],
-      'Houston Metro, TX':  [{ chatgpt:255,gemini:264,llama:246,claude:258 },{ chatgpt:257,gemini:266,llama:248,claude:260 },{ chatgpt:261,gemini:270,llama:252,claude:264 },{ chatgpt:265,gemini:274,llama:256,claude:268 }],
-      'NYC Metro, NY':      [{ chatgpt:329,gemini:341,llama:319,claude:334 },{ chatgpt:333,gemini:345,llama:323,claude:338 },{ chatgpt:338,gemini:350,llama:328,claude:343 },{ chatgpt:343,gemini:356,llama:333,claude:348 }],
-      'Atlanta Metro, GA':  [{ chatgpt:238,gemini:247,llama:230,claude:242 },{ chatgpt:240,gemini:249,llama:232,claude:244 },{ chatgpt:244,gemini:253,llama:236,claude:248 },{ chatgpt:248,gemini:257,llama:240,claude:252 }],
+      'LA Basin, CA':       [{ chatgpt:289,gemini:301,llama:279,claude:293 },{ chatgpt:293,gemini:305,llama:283,claude:297 },{ chatgpt:298,gemini:310,llama:288,claude:302 },{ chatgpt:301,gemini:313,llama:291,claude:305 },{ chatgpt:306,gemini:318,llama:296,claude:310 },{ chatgpt:311,gemini:323,llama:301,claude:315 }],
+      'Houston Metro, TX':  [{ chatgpt:246,gemini:255,llama:237,claude:249 },{ chatgpt:250,gemini:259,llama:241,claude:253 },{ chatgpt:255,gemini:264,llama:246,claude:258 },{ chatgpt:257,gemini:266,llama:248,claude:260 },{ chatgpt:261,gemini:270,llama:252,claude:264 },{ chatgpt:265,gemini:274,llama:256,claude:268 }],
+      'NYC Metro, NY':      [{ chatgpt:320,gemini:332,llama:310,claude:325 },{ chatgpt:324,gemini:336,llama:314,claude:329 },{ chatgpt:329,gemini:341,llama:319,claude:334 },{ chatgpt:333,gemini:345,llama:323,claude:338 },{ chatgpt:338,gemini:350,llama:328,claude:343 },{ chatgpt:343,gemini:356,llama:333,claude:348 }],
+      'Atlanta Metro, GA':  [{ chatgpt:229,gemini:238,llama:221,claude:233 },{ chatgpt:233,gemini:242,llama:225,claude:237 },{ chatgpt:238,gemini:247,llama:230,claude:242 },{ chatgpt:240,gemini:249,llama:232,claude:244 },{ chatgpt:244,gemini:253,llama:236,claude:248 },{ chatgpt:248,gemini:257,llama:240,claude:252 }],
     },
     // Oversized/Overweight — Heavy Truck base + 25%
     'oversized': {
-      'LA Basin, CA':       [{ chatgpt:400,gemini:415,llama:388,claude:405 },{ chatgpt:405,gemini:420,llama:393,claude:410 },{ chatgpt:412,gemini:427,llama:400,claude:417 },{ chatgpt:419,gemini:434,llama:407,claude:424 }],
-      'Houston Metro, TX':  [{ chatgpt:341,gemini:354,llama:330,claude:346 },{ chatgpt:345,gemini:358,llama:334,claude:350 },{ chatgpt:350,gemini:363,llama:339,claude:355 },{ chatgpt:355,gemini:368,llama:344,claude:360 }],
-      'NYC Metro, NY':      [{ chatgpt:442,gemini:458,llama:428,claude:448 },{ chatgpt:447,gemini:463,llama:433,claude:453 },{ chatgpt:454,gemini:470,llama:440,claude:460 },{ chatgpt:461,gemini:477,llama:447,claude:467 }],
-      'Atlanta Metro, GA':  [{ chatgpt:321,gemini:333,llama:311,claude:326 },{ chatgpt:325,gemini:337,llama:315,claude:330 },{ chatgpt:330,gemini:342,llama:320,claude:335 },{ chatgpt:335,gemini:347,llama:325,claude:340 }],
+      'LA Basin, CA':       [{ chatgpt:390,gemini:405,llama:378,claude:395 },{ chatgpt:395,gemini:410,llama:383,claude:400 },{ chatgpt:400,gemini:415,llama:388,claude:405 },{ chatgpt:405,gemini:420,llama:393,claude:410 },{ chatgpt:412,gemini:427,llama:400,claude:417 },{ chatgpt:419,gemini:434,llama:407,claude:424 }],
+      'Houston Metro, TX':  [{ chatgpt:331,gemini:344,llama:320,claude:336 },{ chatgpt:336,gemini:349,llama:325,claude:341 },{ chatgpt:341,gemini:354,llama:330,claude:346 },{ chatgpt:345,gemini:358,llama:334,claude:350 },{ chatgpt:350,gemini:363,llama:339,claude:355 },{ chatgpt:355,gemini:368,llama:344,claude:360 }],
+      'NYC Metro, NY':      [{ chatgpt:432,gemini:448,llama:418,claude:438 },{ chatgpt:437,gemini:453,llama:423,claude:443 },{ chatgpt:442,gemini:458,llama:428,claude:448 },{ chatgpt:447,gemini:463,llama:433,claude:453 },{ chatgpt:454,gemini:470,llama:440,claude:460 },{ chatgpt:461,gemini:477,llama:447,claude:467 }],
+      'Atlanta Metro, GA':  [{ chatgpt:311,gemini:323,llama:301,claude:316 },{ chatgpt:316,gemini:328,llama:306,claude:321 },{ chatgpt:321,gemini:333,llama:311,claude:326 },{ chatgpt:325,gemini:337,llama:315,claude:330 },{ chatgpt:330,gemini:342,llama:320,claude:335 },{ chatgpt:335,gemini:347,llama:325,claude:340 }],
     },
     // High-Value Cargo — Medium Truck + 20% + security
     'high-value': {
-      'LA Basin, CA':       [{ chatgpt:298,gemini:310,llama:288,claude:302 },{ chatgpt:301,gemini:313,llama:291,claude:305 },{ chatgpt:305,gemini:317,llama:295,claude:309 },{ chatgpt:309,gemini:321,llama:299,claude:313 }],
-      'Houston Metro, TX':  [{ chatgpt:255,gemini:264,llama:246,claude:258 },{ chatgpt:257,gemini:266,llama:248,claude:260 },{ chatgpt:261,gemini:270,llama:252,claude:264 },{ chatgpt:265,gemini:274,llama:256,claude:268 }],
-      'NYC Metro, NY':      [{ chatgpt:329,gemini:341,llama:319,claude:334 },{ chatgpt:333,gemini:345,llama:323,claude:338 },{ chatgpt:337,gemini:349,llama:327,claude:342 },{ chatgpt:341,gemini:354,llama:331,claude:346 }],
-      'Atlanta Metro, GA':  [{ chatgpt:238,gemini:247,llama:230,claude:242 },{ chatgpt:240,gemini:249,llama:232,claude:244 },{ chatgpt:244,gemini:253,llama:236,claude:248 },{ chatgpt:248,gemini:257,llama:240,claude:252 }],
+      'LA Basin, CA':       [{ chatgpt:289,gemini:301,llama:279,claude:293 },{ chatgpt:293,gemini:305,llama:283,claude:297 },{ chatgpt:298,gemini:310,llama:288,claude:302 },{ chatgpt:301,gemini:313,llama:291,claude:305 },{ chatgpt:305,gemini:317,llama:295,claude:309 },{ chatgpt:309,gemini:321,llama:299,claude:313 }],
+      'Houston Metro, TX':  [{ chatgpt:246,gemini:255,llama:237,claude:249 },{ chatgpt:250,gemini:259,llama:241,claude:253 },{ chatgpt:255,gemini:264,llama:246,claude:258 },{ chatgpt:257,gemini:266,llama:248,claude:260 },{ chatgpt:261,gemini:270,llama:252,claude:264 },{ chatgpt:265,gemini:274,llama:256,claude:268 }],
+      'NYC Metro, NY':      [{ chatgpt:320,gemini:332,llama:310,claude:325 },{ chatgpt:324,gemini:336,llama:314,claude:329 },{ chatgpt:329,gemini:341,llama:319,claude:334 },{ chatgpt:333,gemini:345,llama:323,claude:338 },{ chatgpt:337,gemini:349,llama:327,claude:342 },{ chatgpt:341,gemini:354,llama:331,claude:346 }],
+      'Atlanta Metro, GA':  [{ chatgpt:229,gemini:238,llama:221,claude:233 },{ chatgpt:233,gemini:242,llama:225,claude:237 },{ chatgpt:238,gemini:247,llama:230,claude:242 },{ chatgpt:240,gemini:249,llama:232,claude:244 },{ chatgpt:244,gemini:253,llama:236,claude:248 },{ chatgpt:248,gemini:257,llama:240,claude:252 }],
     },
     // Tanker (Liquid Cargo) — $3.00/mi baseline + pump fees
     'tanker': {
-      'LA Basin, CA':       [{ chatgpt:428,gemini:444,llama:415,claude:433 },{ chatgpt:433,gemini:449,llama:420,claude:438 },{ chatgpt:439,gemini:455,llama:426,claude:444 },{ chatgpt:445,gemini:461,llama:432,claude:450 }],
-      'Houston Metro, TX':  [{ chatgpt:363,gemini:377,llama:352,claude:368 },{ chatgpt:367,gemini:381,llama:356,claude:372 },{ chatgpt:372,gemini:386,llama:361,claude:377 },{ chatgpt:377,gemini:391,llama:366,claude:382 }],
-      'NYC Metro, NY':      [{ chatgpt:470,gemini:487,llama:456,claude:476 },{ chatgpt:475,gemini:492,llama:461,claude:481 },{ chatgpt:482,gemini:499,llama:468,claude:488 },{ chatgpt:489,gemini:506,llama:475,claude:495 }],
-      'Atlanta Metro, GA':  [{ chatgpt:341,gemini:354,llama:330,claude:346 },{ chatgpt:345,gemini:358,llama:334,claude:350 },{ chatgpt:350,gemini:363,llama:339,claude:355 },{ chatgpt:355,gemini:368,llama:344,claude:360 }],
+      'LA Basin, CA':       [{ chatgpt:418,gemini:434,llama:405,claude:423 },{ chatgpt:423,gemini:439,llama:410,claude:428 },{ chatgpt:428,gemini:444,llama:415,claude:433 },{ chatgpt:433,gemini:449,llama:420,claude:438 },{ chatgpt:439,gemini:455,llama:426,claude:444 },{ chatgpt:445,gemini:461,llama:432,claude:450 }],
+      'Houston Metro, TX':  [{ chatgpt:353,gemini:367,llama:342,claude:358 },{ chatgpt:358,gemini:372,llama:347,claude:363 },{ chatgpt:363,gemini:377,llama:352,claude:368 },{ chatgpt:367,gemini:381,llama:356,claude:372 },{ chatgpt:372,gemini:386,llama:361,claude:377 },{ chatgpt:377,gemini:391,llama:366,claude:382 }],
+      'NYC Metro, NY':      [{ chatgpt:460,gemini:477,llama:446,claude:466 },{ chatgpt:465,gemini:482,llama:451,claude:471 },{ chatgpt:470,gemini:487,llama:456,claude:476 },{ chatgpt:475,gemini:492,llama:461,claude:481 },{ chatgpt:482,gemini:499,llama:468,claude:488 },{ chatgpt:489,gemini:506,llama:475,claude:495 }],
+      'Atlanta Metro, GA':  [{ chatgpt:331,gemini:344,llama:320,claude:336 },{ chatgpt:336,gemini:349,llama:325,claude:341 },{ chatgpt:341,gemini:354,llama:330,claude:346 },{ chatgpt:345,gemini:358,llama:334,claude:350 },{ chatgpt:350,gemini:363,llama:339,claude:355 },{ chatgpt:355,gemini:368,llama:344,claude:360 }],
     },
   },
 }
@@ -865,11 +856,114 @@ function fmtRate(n: number): string {
 
 
 
+// ── Last Mile line chart ──────────────────────────────────────────────────────
+
+const LLM_LINES = [
+  { key: 'chatgpt' as const, color: '#16a34a', label: 'ChatGPT' },
+  { key: 'gemini'  as const, color: '#2563eb', label: 'Gemini'  },
+  { key: 'llama'   as const, color: '#7c3aed', label: 'Llama'   },
+  { key: 'claude'  as const, color: '#ea580c', label: 'Claude'  },
+]
+
+function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
+  const portNames = Object.keys(ports)
+  const [selectedPort, setSelectedPort] = useState(portNames[0] ?? '')
+
+  const series = ports[selectedPort] ?? []
+  if (series.length === 0) return null
+
+  const allVals = series.flatMap(r => [r.chatgpt, r.gemini, r.llama, r.claude,
+    medianOf4(r.chatgpt, r.gemini, r.llama, r.claude)])
+  const minVal = Math.floor(Math.min(...allVals) * 0.95)
+  const maxVal = Math.ceil(Math.max(...allVals) * 1.05)
+
+  const W = 560, H = 220, PAD = { top: 16, right: 16, bottom: 36, left: 52 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  function xPos(i: number) { return PAD.left + (i / (PRICING_MONTHS.length - 1)) * chartW }
+  function yPos(v: number) { return PAD.top + chartH - ((v - minVal) / (maxVal - minVal)) * chartH }
+
+  function buildPath(vals: number[]) {
+    return vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(v).toFixed(1)}`).join(' ')
+  }
+
+  const medians = series.map(r => medianOf4(r.chatgpt, r.gemini, r.llama, r.claude))
+  const yTicks = 4
+  const tickStep = (maxVal - minVal) / yTicks
+
+  return (
+    <div className="space-y-3">
+      {/* Port selector */}
+      <div className="flex gap-1.5 flex-wrap">
+        {portNames.map(p => (
+          <button key={p} onClick={() => setSelectedPort(p)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${selectedPort === p ? 'bg-blue-600 text-white border-blue-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4 overflow-x-auto">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block mx-auto" style={{ maxWidth: '100%' }}>
+          {/* Y grid lines + labels */}
+          {Array.from({ length: yTicks + 1 }, (_, i) => {
+            const v = minVal + tickStep * i
+            const y = yPos(v)
+            return (
+              <g key={i}>
+                <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8">${Math.round(v)}</text>
+              </g>
+            )
+          })}
+
+          {/* X labels */}
+          {PRICING_MONTHS.map((m, i) => (
+            <text key={m} x={xPos(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{m}</text>
+          ))}
+
+          {/* LLM lines */}
+          {LLM_LINES.map(({ key, color }) => (
+            <path key={key} d={buildPath(series.map(r => r[key]))}
+              fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+          ))}
+
+          {/* Median line (bold dashed) */}
+          <path d={buildPath(medians)} fill="none" stroke="#1e293b" strokeWidth="2.5"
+            strokeDasharray="6 3" strokeLinejoin="round" />
+
+          {/* Data points for median */}
+          {medians.map((v, i) => (
+            <circle key={i} cx={xPos(i)} cy={yPos(v)} r="3.5" fill="#1e293b" />
+          ))}
+        </svg>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-xs">
+        {LLM_LINES.map(({ color, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <span className="inline-block w-6 h-0.5 rounded" style={{ backgroundColor: color }} />
+            <span className="text-[var(--color-text-2)]">{label}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-6 h-0.5 rounded bg-slate-800" style={{ borderTop: '2px dashed #1e293b', background: 'none' }} />
+          <span className="font-semibold text-[var(--color-text-1)]">Median</span>
+        </div>
+      </div>
+      <p className="text-xs text-[var(--color-text-3)]">6-month rate trend · Oct 2024 – Mar 2025 · per trip (50-mile baseline)</p>
+    </div>
+  )
+}
+
 // ── Pricing Intelligence component ────────────────────────────────────────────
 
 function PricingIntelligence() {
   const [service, setService] = useState<'drayage' | 'transloading' | 'last-mile'>('drayage')
-  const [subType, setSubType] = useState('standard')
+  const [subType, setSubType] = useState('heavy')
   const [monthIdx, setMonthIdx] = useState(0)
   const [yourRates, setYourRates] = useState<Record<string, string>>({})
 
@@ -914,61 +1008,70 @@ function PricingIntelligence() {
         ))}
       </div>
 
-      {/* Month tabs */}
-      <div className="flex gap-1.5">
-        {PRICING_MONTHS.map((m, i) => (
-          <button key={m} onClick={() => setMonthIdx(i)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${monthIdx === i ? 'bg-blue-600 text-white border-blue-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
-            {m}
-          </button>
-        ))}
-      </div>
+      {/* Month tabs — only for table view (drayage/transloading) */}
+      {service !== 'last-mile' && (
+        <div className="flex gap-1.5 flex-wrap">
+          {PRICING_MONTHS.map((m, i) => (
+            <button key={m} onClick={() => setMonthIdx(i)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${monthIdx === i ? 'bg-blue-600 text-white border-blue-600' : 'border-[var(--color-border)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)]'}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
-        <table className="w-full border-collapse text-sm">
-          <thead className="bg-[var(--color-bg-2)]">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Port</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-green-700 whitespace-nowrap">Avg Rate ChatGPT</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-blue-700 whitespace-nowrap">Avg Rate Gemini</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-violet-700 whitespace-nowrap">Avg Rate Llama</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-orange-700 whitespace-nowrap">Avg Rate Claude</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-1)] uppercase tracking-wide whitespace-nowrap">Median Rate</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Your Rate</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-bg)]">
-            {portNames.map(port => {
-              const r = ports[port]?.[monthIdx]
-              if (!r) return null
-              const median = medianOf4(r.chatgpt, r.gemini, r.llama, r.claude)
-              return (
-                <tr key={port} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                  <td className="px-4 py-3 font-medium text-[var(--color-text-1)] whitespace-nowrap">{port}</td>
-                  <td className="px-3 py-3 text-center font-mono text-sm text-green-700">{fmtRate(r.chatgpt)}</td>
-                  <td className="px-3 py-3 text-center font-mono text-sm text-blue-700">{fmtRate(r.gemini)}</td>
-                  <td className="px-3 py-3 text-center font-mono text-sm text-violet-700">{fmtRate(r.llama)}</td>
-                  <td className="px-3 py-3 text-center font-mono text-sm text-orange-700">{fmtRate(r.claude)}</td>
-                  <td className="px-3 py-3 text-center font-mono font-bold text-[var(--color-text-1)]">{fmtRate(median)}</td>
-                  <td className="px-3 py-3 text-center">
-                    <input
-                      type="number"
-                      value={yourRates[yourRateKey(port)] ?? ''}
-                      onChange={e => setYourRates(prev => ({ ...prev, [yourRateKey(port)]: e.target.value }))}
-                      placeholder="—"
-                      className={`w-24 px-2 py-1 text-xs text-center font-mono border rounded-lg focus:outline-none focus:border-blue-400 bg-[var(--color-bg)] transition-colors ${yourRateColor(port, median) || 'border-[var(--color-border)] text-[var(--color-text-1)]'}`}
-                    />
-                  </td>
+      {/* Last Mile: SVG line chart (6-month trend) */}
+      {service === 'last-mile' ? (
+        <LastMileChart ports={ports} />
+      ) : (
+        <>
+          {/* Table for drayage / transloading */}
+          <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-[var(--color-bg-2)]">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Port</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-green-700 whitespace-nowrap">Avg Rate ChatGPT</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-blue-700 whitespace-nowrap">Avg Rate Gemini</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-violet-700 whitespace-nowrap">Avg Rate Llama</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-orange-700 whitespace-nowrap">Avg Rate Claude</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-1)] uppercase tracking-wide whitespace-nowrap">Median Rate</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide whitespace-nowrap">Your Rate</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-[var(--color-text-3)]">
-        Your Rate: green = at/below median · amber = 5–15% above · red = &gt;15% above
-      </p>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-bg)]">
+                {portNames.map(port => {
+                  const r = ports[port]?.[monthIdx]
+                  if (!r) return null
+                  const median = medianOf4(r.chatgpt, r.gemini, r.llama, r.claude)
+                  return (
+                    <tr key={port} className="hover:bg-[var(--color-bg-2)] transition-colors">
+                      <td className="px-4 py-3 font-medium text-[var(--color-text-1)] whitespace-nowrap">{port}</td>
+                      <td className="px-3 py-3 text-center font-mono text-sm text-green-700">{fmtRate(r.chatgpt)}</td>
+                      <td className="px-3 py-3 text-center font-mono text-sm text-blue-700">{fmtRate(r.gemini)}</td>
+                      <td className="px-3 py-3 text-center font-mono text-sm text-violet-700">{fmtRate(r.llama)}</td>
+                      <td className="px-3 py-3 text-center font-mono text-sm text-orange-700">{fmtRate(r.claude)}</td>
+                      <td className="px-3 py-3 text-center font-mono font-bold text-[var(--color-text-1)]">{fmtRate(median)}</td>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="number"
+                          value={yourRates[yourRateKey(port)] ?? ''}
+                          onChange={e => setYourRates(prev => ({ ...prev, [yourRateKey(port)]: e.target.value }))}
+                          placeholder="—"
+                          className={`w-24 px-2 py-1 text-xs text-center font-mono border rounded-lg focus:outline-none focus:border-blue-400 bg-[var(--color-bg)] transition-colors ${yourRateColor(port, median) || 'border-[var(--color-border)] text-[var(--color-text-1)]'}`}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-[var(--color-text-3)]">
+            Your Rate: green = at/below median · amber = 5–15% above · red = &gt;15% above
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -1214,7 +1317,7 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
         {subTab === 'customers' && <span className="text-sm text-[var(--color-text-3)]">— Accounts, contacts & customer tiers</span>}
         {subTab === 'quotes' && <span className="text-sm text-[var(--color-text-3)]">— Full quote pipeline & conversion tracking</span>}
         {subTab === 'carriers' && <span className="text-sm text-[var(--color-text-3)]">— MC#, DOT#, insurance & performance</span>}
-        {subTab === 'shipments' && <span className="text-sm text-[var(--color-text-3)]">— BOL tracking & delivery status</span>}
+        {subTab === 'shipments' && <span className="text-sm text-[var(--color-text-3)]">— Shipment ID tracking & delivery status</span>}
         {subTab === 'analytics' && <span className="text-sm text-[var(--color-text-3)]">— Ask anything about your operations</span>}
       </div>
 
