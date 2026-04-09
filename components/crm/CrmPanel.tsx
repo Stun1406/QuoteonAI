@@ -872,6 +872,8 @@ const LLM_LINES = [
 function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
   const portNames = Object.keys(ports)
   const [selectedPort, setSelectedPort] = useState(portNames[0] ?? '')
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
 
   const series = ports[selectedPort] ?? []
   if (series.length === 0) return null
@@ -896,6 +898,27 @@ function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
   const yTicks = 4
   const tickStep = (maxVal - minVal) / yTicks
 
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const svgX = ((e.clientX - rect.left) / rect.width) * W
+    const relX = svgX - PAD.left
+    const step = chartW / (PRICING_MONTHS.length - 1)
+    const raw = relX / step
+    if (raw < -0.5 || raw > PRICING_MONTHS.length - 0.5) { setHoveredIdx(null); return }
+    setHoveredIdx(Math.min(Math.max(Math.round(raw), 0), PRICING_MONTHS.length - 1))
+  }
+
+  const hovered = hoveredIdx !== null ? series[hoveredIdx] : null
+  const hoveredMedian = hovered ? medianOf4(hovered.chatgpt, hovered.gemini, hovered.llama, hovered.claude) : null
+
+  // Tooltip placement: flip to left side when near right edge
+  const tooltipX = hoveredIdx !== null ? xPos(hoveredIdx) : 0
+  const tooltipOnRight = hoveredIdx !== null && hoveredIdx < PRICING_MONTHS.length - 2
+  const tooltipRectW = 110, tooltipRectH = 82
+  const tooltipRX = tooltipOnRight ? tooltipX + 10 : tooltipX - tooltipRectW - 10
+  const tooltipRY = PAD.top
+
   return (
     <div className="space-y-3">
       {/* Port selector */}
@@ -910,7 +933,11 @@ function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
 
       {/* Chart */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4 overflow-x-auto">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block mx-auto" style={{ maxWidth: '100%' }}>
+        <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+          className="block mx-auto cursor-crosshair" style={{ maxWidth: '100%' }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoveredIdx(null)}>
+
           {/* Y grid lines + labels */}
           {Array.from({ length: yTicks + 1 }, (_, i) => {
             const v = minVal + tickStep * i
@@ -925,7 +952,10 @@ function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
 
           {/* X labels */}
           {PRICING_MONTHS.map((m, i) => (
-            <text key={m} x={xPos(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{m}</text>
+            <text key={m} x={xPos(i)} y={H - 6} textAnchor="middle" fontSize="10"
+              fill={hoveredIdx === i ? '#1e293b' : '#94a3b8'} fontWeight={hoveredIdx === i ? 'bold' : 'normal'}>
+              {m}
+            </text>
           ))}
 
           {/* LLM lines */}
@@ -942,6 +972,48 @@ function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
           {medians.map((v, i) => (
             <circle key={i} cx={xPos(i)} cy={yPos(v)} r="3.5" fill="#1e293b" />
           ))}
+
+          {/* Hover crosshair */}
+          {hoveredIdx !== null && (
+            <line x1={xPos(hoveredIdx)} y1={PAD.top} x2={xPos(hoveredIdx)} y2={PAD.top + chartH}
+              stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
+          )}
+
+          {/* Hover data points */}
+          {hoveredIdx !== null && hovered && (
+            <>
+              {LLM_LINES.map(({ key, color }) => (
+                <circle key={key} cx={xPos(hoveredIdx)} cy={yPos(hovered[key])} r="5"
+                  fill={color} stroke="white" strokeWidth="1.5" />
+              ))}
+              <circle cx={xPos(hoveredIdx)} cy={yPos(hoveredMedian!)} r="5.5"
+                fill="#1e293b" stroke="white" strokeWidth="1.5" />
+            </>
+          )}
+
+          {/* Tooltip */}
+          {hoveredIdx !== null && hovered && (
+            <g>
+              <rect x={tooltipRX} y={tooltipRY} width={tooltipRectW} height={tooltipRectH}
+                rx="6" fill="white" stroke="#e2e8f0" strokeWidth="1"
+                style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.10))' }} />
+              <text x={tooltipRX + 8} y={tooltipRY + 14} fontSize="10" fontWeight="bold" fill="#1e293b">
+                {PRICING_MONTHS[hoveredIdx]}
+              </text>
+              {LLM_LINES.map(({ key, color, label }, li) => (
+                <g key={key}>
+                  <circle cx={tooltipRX + 13} cy={tooltipRY + 26 + li * 12} r="3.5" fill={color} />
+                  <text x={tooltipRX + 22} y={tooltipRY + 30 + li * 12} fontSize="10" fill="#334155">
+                    {label}: <tspan fontWeight="bold">${hovered[key]}</tspan>
+                  </text>
+                </g>
+              ))}
+              <line x1={tooltipRX + 8} y1={tooltipRY + tooltipRectH - 17} x2={tooltipRX + tooltipRectW - 8} y2={tooltipRY + tooltipRectH - 17} stroke="#e2e8f0" strokeWidth="1" />
+              <text x={tooltipRX + 8} y={tooltipRY + tooltipRectH - 6} fontSize="10" fill="#1e293b" fontWeight="bold">
+                Median: ${Math.round(hoveredMedian!)}
+              </text>
+            </g>
+          )}
         </svg>
       </div>
 
@@ -958,7 +1030,7 @@ function LastMileChart({ ports }: { ports: Record<string, LLMRates[]> }) {
           <span className="font-semibold text-[var(--color-text-1)]">Median</span>
         </div>
       </div>
-      <p className="text-xs text-[var(--color-text-3)]">6-month rate trend · Oct 2024 – Mar 2025 · per trip (50-mile baseline)</p>
+      <p className="text-xs text-[var(--color-text-3)]">6-month rate trend · Oct 2024 – Mar 2025 · per trip (50-mile baseline) · hover to inspect values</p>
     </div>
   )
 }
