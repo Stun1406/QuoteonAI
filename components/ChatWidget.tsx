@@ -10,6 +10,7 @@ interface Message {
 
 interface QuoteSummary {
   id: string
+  thread_id?: string | null
   service_label: string
   sub_type: string
   port: string
@@ -62,20 +63,59 @@ function SendIcon() {
   )
 }
 
-function QuoteCard({ quote }: { quote: QuoteSummary }) {
+function QuoteCard({
+  quote,
+  onAction,
+}: {
+  quote: QuoteSummary
+  onAction?: (action: 'accept' | 'decline' | 'revise') => void
+}) {
+  const [actionTaken, setActionTaken] = useState<'accept' | 'decline' | 'revise' | null>(null)
+  const [updating, setUpdating] = useState(false)
+
+  async function handleAction(action: 'accept' | 'decline' | 'revise') {
+    setUpdating(true)
+    const statusMap = { accept: 'won', decline: 'lost', revise: 'revision-requested' }
+    try {
+      await fetch('/api/chat/quote/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: quote.id,
+          threadId: quote.thread_id ?? undefined,
+          status: statusMap[action],
+        }),
+      })
+    } catch { /* best-effort */ }
+    setActionTaken(action)
+    setUpdating(false)
+    onAction?.(action)
+  }
+
+  const actionLabel = actionTaken === 'accept'
+    ? '✓ Quote Accepted'
+    : actionTaken === 'decline'
+    ? '✗ Quote Declined'
+    : actionTaken === 'revise'
+    ? '✎ Revision Requested'
+    : null
+
   return (
-    <div className="mt-2 bg-white border border-blue-200 rounded-xl p-3 text-xs shadow-sm">
+    <div className="mt-2 bg-white border border-blue-200 rounded-xl p-3 text-xs shadow-sm w-full">
+      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <span className="font-semibold text-blue-800 text-[11px] uppercase tracking-wide">Quote Generated</span>
         <span className="text-slate-400 font-mono text-[10px]">{quote.id}</span>
       </div>
+
+      {/* Details */}
       <div className="space-y-1 text-slate-600">
         <div className="flex justify-between">
           <span>Service</span>
           <span className="font-medium text-slate-800">{quote.service_label} — {quote.sub_type}</span>
         </div>
         <div className="flex justify-between">
-          <span>Port</span>
+          <span>Port / Region</span>
           <span className="font-medium text-slate-800">{quote.port}</span>
         </div>
         <div className="flex justify-between">
@@ -83,16 +123,61 @@ function QuoteCard({ quote }: { quote: QuoteSummary }) {
           <span className="font-medium text-slate-800">{quote.quantity} {quote.quantity_unit}</span>
         </div>
       </div>
+
+      {/* Total */}
       <div className="mt-2 pt-2 border-t border-blue-100 flex justify-between items-center">
         <span className="text-slate-500">Total</span>
         <span className="text-lg font-bold text-blue-700">${quote.total.toLocaleString()}</span>
       </div>
-      <div className="mt-1.5 flex items-center gap-1 text-green-600 text-[11px]">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Sent to {quote.customer_email}
+
+      {/* Sent confirmation + thread ID */}
+      <div className="mt-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-1 text-green-600 text-[11px]">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Sent to {quote.customer_email}
+        </div>
+        {quote.thread_id && (
+          <span className="font-mono text-[10px] text-slate-400">{quote.thread_id}</span>
+        )}
       </div>
+
+      {/* Action buttons */}
+      {!actionTaken ? (
+        <div className="mt-3 pt-2 border-t border-slate-100">
+          <p className="text-[11px] text-slate-500 mb-2 font-medium">Respond to this quote:</p>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => handleAction('accept')}
+              disabled={updating}
+              className="flex-1 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 font-semibold text-[11px] hover:bg-green-100 transition-colors disabled:opacity-50"
+            >
+              ✓ Accept
+            </button>
+            <button
+              onClick={() => handleAction('revise')}
+              disabled={updating}
+              className="flex-1 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 font-semibold text-[11px] hover:bg-amber-100 transition-colors disabled:opacity-50"
+            >
+              ✎ Revise
+            </button>
+            <button
+              onClick={() => handleAction('decline')}
+              disabled={updating}
+              className="flex-1 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 font-semibold text-[11px] hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              ✗ Decline
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={`mt-3 pt-2 border-t border-slate-100 text-center text-[12px] font-semibold ${
+          actionTaken === 'accept' ? 'text-green-600' : actionTaken === 'decline' ? 'text-red-500' : 'text-amber-600'
+        }`}>
+          {actionLabel}
+        </div>
+      )}
     </div>
   )
 }
@@ -205,7 +290,19 @@ export default function ChatWidget() {
                     }`}>
                       {renderContent(msg.content)}
                     </div>
-                    {msg.quote && <QuoteCard quote={msg.quote} />}
+                    {msg.quote && (
+                      <QuoteCard
+                        quote={msg.quote}
+                        onAction={(action) => {
+                          const replies = {
+                            accept: `I'd like to accept quote ${msg.quote!.id}. Please proceed with the booking.`,
+                            decline: `I'd like to decline quote ${msg.quote!.id}. Thank you for your time.`,
+                            revise: `I'd like to request a revision for quote ${msg.quote!.id}. Could we discuss the details?`,
+                          }
+                          send(replies[action])
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               ))}

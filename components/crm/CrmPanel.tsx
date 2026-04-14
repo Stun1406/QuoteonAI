@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Types Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type CrmSubTab = 'dashboard' | 'customers' | 'quotes' | 'carriers' | 'shipments' | 'analytics' | 'pricing'
 
@@ -88,17 +88,18 @@ interface Shipment {
 interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
+  showActions?: boolean
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(v: number | null | undefined): string {
-  if (v == null) return 'Ã¢â‚¬â€'
+  if (v == null) return '—'
   return `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 function fmtDate(d: string | null): string {
-  if (!d) return 'Ã¢â‚¬â€'
+  if (!d) return '—'
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
@@ -124,7 +125,7 @@ function shipmentSortTime(shipment: Shipment): number {
 }
 
 function serviceLabel(t: string | null): string {
-  if (!t) return 'Ã¢â‚¬â€'
+  if (!t) return '—'
   const m: Record<string, string> = {
     drayage: 'Drayage', warehousing: 'Transloading', 'last-mile': 'Last Mile',
     hybrid: 'Combined', general: 'General',
@@ -221,7 +222,7 @@ function Table({ headers, children }: { headers: string[]; children: React.React
   )
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Sub-panels Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Sub-panels ────────────────────────────────────────────────────────────────
 
 function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: RecentQuote[] }) {
   if (!stats) {
@@ -252,7 +253,7 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
         />
         <StatCard
           label="Avg Quote Value"
-          value={stats.avgQuoteValue ? `$${Number(stats.avgQuoteValue).toLocaleString()}` : 'Ã¢â‚¬â€'}
+          value={stats.avgQuoteValue ? `$${Number(stats.avgQuoteValue).toLocaleString()}` : '—'}
           sub="Per quote"
         />
         <StatCard label="Total Shipments" value={totalShipments} sub="All time" />
@@ -332,8 +333,8 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
           <Table headers={['Customer', 'Company', 'Type', 'Value', 'Status', 'Date']}>
             {recent.map(q => (
               <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                <TD>{q.contact_name ?? 'Ã¢â‚¬â€'}</TD>
-                <TD className="font-medium">{q.company_name ?? 'Ã¢â‚¬â€'}</TD>
+                <TD>{q.contact_name ?? '—'}</TD>
+                <TD className="font-medium">{q.company_name ?? '—'}</TD>
                 <TD>{serviceLabel(q.processor_type)}</TD>
                 <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
                 <TD><Badge label={q.status} /></TD>
@@ -349,7 +350,7 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
 
 const SAMPLE_FLD: Account = {
   id: 'sample-fld',
-  business_name: 'FLD Ã¢â‚¬â€ FL Distribution',
+  business_name: 'FLD — FL Distribution',
   email_domain: 'fldistribution.com',
   industry_type: 'Freight & Logistics',
   category: 'platinum',
@@ -362,7 +363,7 @@ const SAMPLE_FLD: Account = {
   created_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Seed data (shown when API returns empty / before real data loads) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Seed data (shown when API returns empty / before real data loads) ──────────
 
 function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString() }
 
@@ -376,12 +377,12 @@ const SEED_ACCOUNTS: Account[] = [
 ]
 
 const SEED_QUOTES: Quote[] = [
-  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100,  confidence_score: 0.97, created_at: daysAgo(3),  contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD Ã¢â‚¬â€ FL Distribution',  industry_type: 'Freight & Logistics' },
+  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100,  confidence_score: 0.97, created_at: daysAgo(3),  contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution',  industry_type: 'Freight & Logistics' },
   { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450,  confidence_score: 0.95, created_at: daysAgo(5),  contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
   { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200,  confidence_score: 0.91, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
   { id: 'q-4',  processor_type: 'drayage',    status: 'won',         quote_value: 980,   confidence_score: 0.98, created_at: daysAgo(8),  contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',   industry_type: 'Warehousing & Distribution' },
   { id: 'q-5',  processor_type: 'last-mile',  status: 'quoted',      quote_value: 560,   confidence_score: 0.88, created_at: daysAgo(10), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners', industry_type: 'Freight Brokerage' },
-  { id: 'q-6',  processor_type: 'drayage',    status: 'won',         quote_value: 1750,  confidence_score: 0.96, created_at: daysAgo(12), contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD Ã¢â‚¬â€ FL Distribution',  industry_type: 'Freight & Logistics' },
+  { id: 'q-6',  processor_type: 'drayage',    status: 'won',         quote_value: 1750,  confidence_score: 0.96, created_at: daysAgo(12), contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution',  industry_type: 'Freight & Logistics' },
   { id: 'q-7',  processor_type: 'warehousing',status: 'won',         quote_value: 4800,  confidence_score: 0.93, created_at: daysAgo(14), contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',          industry_type: 'Third-Party Logistics' },
   { id: 'q-8',  processor_type: 'drayage',    status: 'won',         quote_value: 1300,  confidence_score: 0.94, created_at: daysAgo(16), contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',    industry_type: 'Import & Distribution' },
   { id: 'q-9',  processor_type: 'hybrid',     status: 'quoted',      quote_value: 5400,  confidence_score: 0.87, created_at: daysAgo(18), contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',   industry_type: 'Warehousing & Distribution' },
@@ -400,22 +401,22 @@ const SEED_CARRIERS: Carrier[] = [
 ]
 
 const SEED_SHIPMENTS: Shipment[] = [
-  { id: 'sh-1',  bol_number: 'BOL-2024-0181', customer_name: 'Maria Santos',    customer_company: 'FLD Ã¢â‚¬â€ FL Distribution',  carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(5),  delivery_date: daysAgo(4),  actual_pickup: daysAgo(5),  actual_delivery: daysAgo(4),  status: 'delivered',  quote_value: 2100 },
+  { id: 'sh-1',  bol_number: 'BOL-2024-0181', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(5),  delivery_date: daysAgo(4),  actual_pickup: daysAgo(5),  actual_delivery: daysAgo(4),  status: 'delivered',  quote_value: 2100 },
   { id: 'sh-2',  bol_number: 'BOL-2024-0182', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Chino, CA',          equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(3),  delivery_date: daysAgo(2),  actual_pickup: daysAgo(3),  actual_delivery: null,        status: 'in-transit', quote_value: 1450 },
   { id: 'sh-3',  bol_number: 'BOL-2024-0183', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Pacific Gateway Logistics', origin: 'Los Angeles, CA',  destination: 'Fontana, CA',        equipment_type: '53ft Trailer',   service_type: 'Transloading', pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 3200 },
   { id: 'sh-4',  bol_number: 'BOL-2024-0184', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'SoCal Dray Express',       origin: 'San Pedro, CA',    destination: 'Rancho Cucamonga, CA',equipment_type: '20ft Container', service_type: 'Drayage',    pickup_date: daysAgo(7),  delivery_date: daysAgo(6),  actual_pickup: daysAgo(7),  actual_delivery: daysAgo(6),  status: 'delivered',  quote_value: 980  },
   { id: 'sh-5',  bol_number: 'BOL-2024-0185', customer_name: 'James Kim',       customer_company: 'SoCal Freight Partners', carrier_name: 'Desert Run Carriers',      origin: 'Carson, CA',       destination: 'Riverside, CA',      equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 560  },
-  { id: 'sh-6',  bol_number: 'BOL-2024-0179', customer_name: 'Maria Santos',    customer_company: 'FLD Ã¢â‚¬â€ FL Distribution',  carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'Colton, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(12), delivery_date: daysAgo(11), actual_pickup: daysAgo(12), actual_delivery: daysAgo(11), status: 'delivered',  quote_value: 1750 },
+  { id: 'sh-6',  bol_number: 'BOL-2024-0179', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'Colton, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(12), delivery_date: daysAgo(11), actual_pickup: daysAgo(12), actual_delivery: daysAgo(11), status: 'delivered',  quote_value: 1750 },
   { id: 'sh-7',  bol_number: 'BOL-2024-0177', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Ontario, CA',        equipment_type: '40ft Container', service_type: 'Transloading', pickup_date: daysAgo(14), delivery_date: daysAgo(13), actual_pickup: daysAgo(14), actual_delivery: daysAgo(13), status: 'delivered',  quote_value: 4800 },
   { id: 'sh-8',  bol_number: 'BOL-2024-0175', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA',  destination: 'Irvine, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(16), delivery_date: daysAgo(15), actual_pickup: daysAgo(16), actual_delivery: daysAgo(15), status: 'delivered',  quote_value: 1300 },
   { id: 'sh-9',  bol_number: 'BOL-2024-0172', customer_name: 'Tony Reyes',      customer_company: 'Empire State Logistics', carrier_name: 'Pacific Gateway Logistics', origin: 'Wilmington, CA',   destination: 'Corona, CA',         equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(20), delivery_date: daysAgo(19), actual_pickup: daysAgo(20), actual_delivery: daysAgo(19), status: 'delivered',  quote_value: 890  },
   { id: 'sh-10', bol_number: 'BOL-2024-0170', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA',  destination: 'San Bernardino, CA', equipment_type: '53ft Trailer',   service_type: 'Drayage',    pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 1800 },
   { id: 'sh-11', bol_number: 'BOL-2024-0168', customer_name: 'Lisa Wang',       customer_company: 'Harbor Trade Group',     carrier_name: 'Desert Run Carriers',      origin: 'Harbor City, CA',  destination: 'Torrance, CA',       equipment_type: 'Straight Truck', service_type: 'Last Mile',  pickup_date: daysAgo(22), delivery_date: daysAgo(21), actual_pickup: daysAgo(22), actual_delivery: daysAgo(21), status: 'delivered',  quote_value: 420  },
-  { id: 'sh-12', bol_number: 'BOL-2024-0165', customer_name: 'Maria Santos',    customer_company: 'FLD Ã¢â‚¬â€ FL Distribution',  carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Anaheim, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 1350 },
+  { id: 'sh-12', bol_number: 'BOL-2024-0165', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Inland Empire Transport',   origin: 'Long Beach, CA',   destination: 'Anaheim, CA',        equipment_type: '40ft Container', service_type: 'Drayage',    pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 1350 },
 ]
 
 const SEED_RECENT_QUOTES: RecentQuote[] = [
-  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100, created_at: daysAgo(3),  contact_name: 'Maria Santos',    company_name: 'FLD Ã¢â‚¬â€ FL Distribution'  },
+  { id: 'q-1',  processor_type: 'drayage',    status: 'won',         quote_value: 2100, created_at: daysAgo(3),  contact_name: 'Maria Santos',    company_name: 'FLD — FL Distribution'  },
   { id: 'q-2',  processor_type: 'drayage',    status: 'won',         quote_value: 1450, created_at: daysAgo(5),  contact_name: 'Mike Chen',       company_name: 'Pacific Imports LLC'    },
   { id: 'q-3',  processor_type: 'warehousing',status: 'quoted',      quote_value: 3200, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', company_name: 'Western LogCo'          },
   { id: 'q-4',  processor_type: 'drayage',    status: 'closed',      quote_value: 980,  created_at: daysAgo(8),  contact_name: 'David Park',      company_name: 'Sunrise Distribution'   },
@@ -476,15 +477,15 @@ function Customers({ accounts, loading }: { accounts: Account[]; loading: boolea
               <TD>
                 <div className="font-medium">{a.business_name}</div>
               </TD>
-              <TD>{a.industry_type ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{a.industry_type ?? '—'}</TD>
               <TD>
                 <Badge
                   label={(a.category ?? 'standard').charAt(0).toUpperCase() + (a.category ?? 'standard').slice(1)}
                   styleKey={a.category ?? 'standard'}
                 />
               </TD>
-              <TD>{a.region ?? 'Ã¢â‚¬â€'}</TD>
-              <TD>{a.credit_terms ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{a.region ?? '—'}</TD>
+              <TD>{a.credit_terms ?? '—'}</TD>
               <TD className="text-center">{a.contact_count}</TD>
               <TD className="text-center">{a.quote_count}</TD>
               <TD className="font-medium text-blue-700">{fmt(a.total_value)}</TD>
@@ -544,11 +545,11 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
           {filtered.map(q => (
             <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD>
-                <div className="font-medium">{q.contact_name ?? 'Ã¢â‚¬â€'}</div>
+                <div className="font-medium">{q.contact_name ?? '—'}</div>
                 {q.contact_email && <div className="text-xs text-[var(--color-text-3)]">{q.contact_email}</div>}
               </TD>
-              <TD>{q.company_name ?? 'Ã¢â‚¬â€'}</TD>
-              <TD>{q.industry_type ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{q.company_name ?? '—'}</TD>
+              <TD>{q.industry_type ?? '—'}</TD>
               <TD>
                 <span className="text-xs font-medium bg-[var(--color-bg-2)] px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-2)]">
                   {serviceLabel(q.processor_type)}
@@ -602,17 +603,17 @@ function Carriers({ carriers, loading }: { carriers: Carrier[]; loading: boolean
               <TD>
                 <div className="font-medium">{c.company_name}</div>
               </TD>
-              <TD>{c.mc_number ?? 'Ã¢â‚¬â€'}</TD>
-              <TD>{c.dot_number ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{c.mc_number ?? '—'}</TD>
+              <TD>{c.dot_number ?? '—'}</TD>
               <TD>
-                <div>{c.contact_name ?? 'Ã¢â‚¬â€'}</div>
+                <div>{c.contact_name ?? '—'}</div>
                 {c.contact_phone && <div className="text-xs text-[var(--color-text-3)]">{c.contact_phone}</div>}
               </TD>
               <TD><Badge label={c.insurance_status} /></TD>
-              <TD className="text-[var(--color-text-3)]">{c.insurance_expiry ? fmtDate(c.insurance_expiry) : 'Ã¢â‚¬â€'}</TD>
+              <TD className="text-[var(--color-text-3)]">{c.insurance_expiry ? fmtDate(c.insurance_expiry) : '—'}</TD>
               <TD>
                 <span className={`font-bold text-base ${scoreColor(c.performance_score)}`}>
-                  {c.performance_score != null ? `${c.performance_score}/10` : 'Ã¢â‚¬â€'}
+                  {c.performance_score != null ? `${c.performance_score}/10` : '—'}
                 </span>
               </TD>
               <TD><Badge label={c.status} /></TD>
@@ -670,15 +671,15 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
           {filtered.map(s => (
             <tr key={s.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD><span className="font-mono text-xs">{s.displayId}</span></TD>
-              <TD>{s.customer_company ?? s.customer_name ?? 'Ã¢â‚¬â€'}</TD>
-              <TD>{s.carrier_name ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{s.customer_company ?? s.customer_name ?? '—'}</TD>
+              <TD>{s.carrier_name ?? '—'}</TD>
               <TD>
-                <span className="text-xs">{s.origin ?? 'Ã¢â‚¬â€'}</span>
-                {s.origin && s.destination && <span className="mx-1 text-[var(--color-text-3)]">Ã¢â€ â€™</span>}
+                <span className="text-xs">{s.origin ?? '—'}</span>
+                {s.origin && s.destination && <span className="mx-1 text-[var(--color-text-3)]">→</span>}
                 <span className="text-xs">{s.destination ?? ''}</span>
               </TD>
-              <TD>{s.equipment_type ?? 'Ã¢â‚¬â€'}</TD>
-              <TD>{s.service_type ?? 'Ã¢â‚¬â€'}</TD>
+              <TD>{s.equipment_type ?? '—'}</TD>
+              <TD>{s.service_type ?? '—'}</TD>
               <TD className="text-[var(--color-text-3)]">{fmtDate(s.pickup_date)}</TD>
               <TD className="text-[var(--color-text-3)]">{fmtDate(s.actual_delivery ?? s.delivery_date)}</TD>
               <TD className="font-medium text-blue-700">{fmt(s.quote_value)}</TD>
@@ -691,33 +692,33 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
   )
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Pricing Intelligence (static placeholder) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Pricing Intelligence (static placeholder) ────────────────────────────────
 
 type LLMRates = { chatgpt: number; gemini: number; llama: number; claude: number }
 
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Pricing Intelligence static data Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Pricing Intelligence static data ─────────────────────────────────────────
 
 const SERVICE_SUBTYPES: Record<string, { id: string; label: string }[]> = {
   // Drayage classified by cargo weight per rate sheet
   drayage: [
-    { id: 'heavy',     label: 'Heavy (43,000Ã¢â‚¬â€œ47,000 lbs)' },
-    { id: 'very-heavy',label: 'Very Heavy (47,000Ã¢â‚¬â€œ50,000 lbs)' },
+    { id: 'heavy',     label: 'Heavy (43,000–47,000 lbs)' },
+    { id: 'very-heavy',label: 'Very Heavy (47,000–50,000 lbs)' },
   ],
   // Transloading classified by container ft + loose cargo by piece count
   transloading: [
-    { id: 'palletized-20ft',      label: 'Palletized Ã¢â‚¬â€œ 20ft' },
-    { id: 'palletized-40ft',      label: 'Palletized Ã¢â‚¬â€œ 40/45/53ft' },
-    { id: 'loose-20ft-500-1000',  label: 'Loose Cargo 20ft (500Ã¢â‚¬â€œ1,000 pcs)' },
+    { id: 'palletized-20ft',      label: 'Palletized – 20ft' },
+    { id: 'palletized-40ft',      label: 'Palletized – 40/45/53ft' },
+    { id: 'loose-20ft-500-1000',  label: 'Loose Cargo 20ft (500–1,000 pcs)' },
     { id: 'loose-20ft-1000plus',  label: 'Loose Cargo 20ft (1,000+ pcs)' },
-    { id: 'loose-40ft-500-1000',  label: 'Loose Cargo 40/45/53ft (500Ã¢â‚¬â€œ1,000 pcs)' },
+    { id: 'loose-40ft-500-1000',  label: 'Loose Cargo 40/45/53ft (500–1,000 pcs)' },
     { id: 'loose-40ft-1000plus',  label: 'Loose Cargo 40/45/53ft (1,000+ pcs)' },
   ],
   // Last Mile by truck type per rate sheet
   'last-mile': [
     { id: 'light-truck',  label: 'Light Truck (Sprinter/Box, <12ft)' },
-    { id: 'medium-truck', label: 'Medium Truck (Straight, 20Ã¢â‚¬â€œ26ft)' },
-    { id: 'heavy-truck',  label: 'Heavy Truck (Semi, 40Ã¢â‚¬â€œ53ft)' },
+    { id: 'medium-truck', label: 'Medium Truck (Straight, 20–26ft)' },
+    { id: 'heavy-truck',  label: 'Heavy Truck (Semi, 40–53ft)' },
     { id: 'flatbed',      label: 'Flatbed' },
     { id: 'reefer',       label: 'Reefer (Temperature Controlled)' },
     { id: 'hazmat',       label: 'Hazmat Cargo' },
@@ -729,16 +730,16 @@ const SERVICE_SUBTYPES: Record<string, { id: string; label: string }[]> = {
 
 const PRICING_MONTHS = ['Oct 2024', 'Nov 2024', 'Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025']
 
-// Static rates: service Ã¢â€ â€™ subType Ã¢â€ â€™ portName Ã¢â€ â€™ [month0Ã¢â‚¬Â¦month3]
+// Static rates: service → subType → portName → [month0…month3]
 // Real market rates sourced from industry benchmarks (C.H. Robinson, WCL Consulting, Avison Young, DAT, Uber Freight, 2024-2025)
 // Drayage: all-in per container (base rate + fuel surcharge + chassis + pier pass + weight surcharges where applicable)
 // Transloading: per-container handling fee (unload + palletize/sort based on FLD rate sheet + port market premium)
-// Last Mile: per-trip rate (50-mile regional baseline, $/mi from DAT 2024-2025 spot data Ãƒâ€” 50mi + loading/admin)
+// Last Mile: per-trip rate (50-mile regional baseline, $/mi from DAT 2024-2025 spot data × 50mi + loading/admin)
 // LLM variance: chatgpt ~+1%, gemini ~+2.5%, llama ~-2%, claude ~+0.5% vs market midpoint
-// Monthly trend: OctÃ¢â€ â€™Mar +~4% total (drayage recovering post-2024 softening; transloading stable; last-mile +2-3%)
+// Monthly trend: Oct→Mar +~4% total (drayage recovering post-2024 softening; transloading stable; last-mile +2-3%)
 const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> = {
   drayage: {
-    // Heavy 43kÃ¢â‚¬â€œ47k lbs: standard base ~$500 LA/LB + tri-axle chassis ($150) + OW permit ($75-100) = ~$750 all-in
+    // Heavy 43k–47k lbs: standard base ~$500 LA/LB + tri-axle chassis ($150) + OW permit ($75-100) = ~$750 all-in
     'heavy': {
       'LA / LB Port, CA':  [{ chatgpt:728,gemini:739,llama:706,claude:724 },{ chatgpt:744,gemini:755,llama:722,claude:740 },{ chatgpt:759,gemini:771,llama:737,claude:755 },{ chatgpt:765,gemini:777,llama:742,claude:761 },{ chatgpt:772,gemini:785,llama:749,claude:768 },{ chatgpt:780,gemini:792,llama:756,claude:775 }],
       'Houston Port, TX':  [{ chatgpt:631,gemini:640,llama:612,claude:627 },{ chatgpt:645,gemini:655,llama:626,claude:641 },{ chatgpt:658,gemini:668,llama:638,claude:655 },{ chatgpt:663,gemini:674,llama:643,claude:660 },{ chatgpt:669,gemini:680,llama:649,claude:666 },{ chatgpt:676,gemini:687,llama:656,claude:672 }],
@@ -746,7 +747,7 @@ const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> =
       'Savannah Port, GA': [{ chatgpt:578,gemini:587,llama:561,claude:575 },{ chatgpt:590,gemini:599,llama:572,claude:587 },{ chatgpt:602,gemini:612,llama:584,claude:599 },{ chatgpt:607,gemini:617,llama:589,claude:604 },{ chatgpt:613,gemini:622,llama:594,claude:609 },{ chatgpt:618,gemini:629,llama:600,claude:615 }],
       'Seattle Port, WA':  [{ chatgpt:679,gemini:690,llama:659,claude:675 },{ chatgpt:694,gemini:705,llama:674,claude:691 },{ chatgpt:709,gemini:720,llama:687,claude:705 },{ chatgpt:715,gemini:726,llama:693,claude:711 },{ chatgpt:721,gemini:732,llama:699,claude:717 },{ chatgpt:730,gemini:741,llama:708,claude:726 }],
     },
-    // Very Heavy 47kÃ¢â‚¬â€œ50k lbs: standard base + tri-axle + heavier permits = ~$850 LA/LB all-in
+    // Very Heavy 47k–50k lbs: standard base + tri-axle + heavier permits = ~$850 LA/LB all-in
     'very-heavy': {
       'LA / LB Port, CA':  [{ chatgpt:825,gemini:838,llama:800,claude:820 },{ chatgpt:843,gemini:857,llama:818,claude:839 },{ chatgpt:860,gemini:874,llama:835,claude:856 },{ chatgpt:867,gemini:881,llama:841,claude:863 },{ chatgpt:876,gemini:890,llama:849,claude:871 },{ chatgpt:884,gemini:898,llama:857,claude:879 }],
       'Houston Port, TX':  [{ chatgpt:728,gemini:739,llama:706,claude:724 },{ chatgpt:744,gemini:755,llama:722,claude:740 },{ chatgpt:759,gemini:771,llama:737,claude:755 },{ chatgpt:765,gemini:777,llama:742,claude:761 },{ chatgpt:772,gemini:785,llama:749,claude:768 },{ chatgpt:780,gemini:792,llama:756,claude:775 }],
@@ -808,28 +809,28 @@ const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> =
       'NYC Metro, NY':      [{ chatgpt:214,gemini:217,llama:207,claude:213 },{ chatgpt:219,gemini:222,llama:212,claude:217 },{ chatgpt:222,gemini:226,llama:216,claude:221 },{ chatgpt:225,gemini:228,llama:218,claude:224 },{ chatgpt:227,gemini:230,llama:220,claude:226 },{ chatgpt:229,gemini:232,llama:222,claude:228 }],
       'Atlanta Metro, GA':  [{ chatgpt:143,gemini:145,llama:138,claude:142 },{ chatgpt:146,gemini:148,llama:141,claude:145 },{ chatgpt:149,gemini:151,llama:144,claude:148 },{ chatgpt:150,gemini:152,llama:145,claude:149 },{ chatgpt:152,gemini:154,llama:147,claude:151 },{ chatgpt:153,gemini:155,llama:148,claude:152 }],
     },
-    // Medium Truck (Straight 20-26ft): $1.75-2.25/mi spot. 50mi Ãƒâ€” $2.00 avg + loading = $268 LA Basin
+    // Medium Truck (Straight 20-26ft): $1.75-2.25/mi spot. 50mi × $2.00 avg + loading = $268 LA Basin
     'medium-truck': {
       'LA Basin, CA':       [{ chatgpt:260,gemini:264,llama:252,claude:259 },{ chatgpt:266,gemini:270,llama:258,claude:265 },{ chatgpt:271,gemini:275,llama:263,claude:270 },{ chatgpt:273,gemini:278,llama:265,claude:272 },{ chatgpt:276,gemini:281,llama:268,claude:275 },{ chatgpt:278,gemini:283,llama:270,claude:277 }],
       'Houston Metro, TX':  [{ chatgpt:216,gemini:219,llama:209,claude:215 },{ chatgpt:221,gemini:224,llama:214,claude:220 },{ chatgpt:225,gemini:228,llama:218,claude:224 },{ chatgpt:227,gemini:230,llama:220,claude:226 },{ chatgpt:229,gemini:232,llama:222,claude:228 },{ chatgpt:231,gemini:234,llama:224,claude:230 }],
       'NYC Metro, NY':      [{ chatgpt:300,gemini:304,llama:291,claude:298 },{ chatgpt:306,gemini:311,llama:296,claude:304 },{ chatgpt:312,gemini:317,llama:302,claude:310 },{ chatgpt:314,gemini:319,llama:304,claude:312 },{ chatgpt:317,gemini:322,llama:307,claude:315 },{ chatgpt:320,gemini:325,llama:310,claude:318 }],
       'Atlanta Metro, GA':  [{ chatgpt:202,gemini:205,llama:195,claude:200 },{ chatgpt:206,gemini:209,llama:199,claude:204 },{ chatgpt:210,gemini:213,llama:203,claude:208 },{ chatgpt:212,gemini:215,llama:205,claude:210 },{ chatgpt:214,gemini:217,llama:207,claude:212 },{ chatgpt:216,gemini:219,llama:209,claude:214 }],
     },
-    // Heavy Truck (Semi 40-53ft): $2.25-3.00/mi spot. 50mi Ãƒâ€” $2.75 avg + fees = $408 LA Basin
+    // Heavy Truck (Semi 40-53ft): $2.25-3.00/mi spot. 50mi × $2.75 avg + fees = $408 LA Basin
     'heavy-truck': {
       'LA Basin, CA':       [{ chatgpt:396,gemini:402,llama:384,claude:394 },{ chatgpt:405,gemini:411,llama:392,claude:403 },{ chatgpt:413,gemini:419,llama:401,claude:411 },{ chatgpt:416,gemini:423,llama:404,claude:414 },{ chatgpt:420,gemini:427,llama:407,claude:418 },{ chatgpt:424,gemini:431,llama:411,claude:422 }],
       'Houston Metro, TX':  [{ chatgpt:328,gemini:333,llama:318,claude:326 },{ chatgpt:335,gemini:340,llama:325,claude:333 },{ chatgpt:342,gemini:347,llama:332,claude:340 },{ chatgpt:345,gemini:350,llama:334,claude:343 },{ chatgpt:348,gemini:354,llama:338,claude:346 },{ chatgpt:351,gemini:357,llama:340,claude:349 }],
       'NYC Metro, NY':      [{ chatgpt:459,gemini:466,llama:445,claude:456 },{ chatgpt:469,gemini:476,llama:454,claude:466 },{ chatgpt:478,gemini:485,llama:463,claude:475 },{ chatgpt:482,gemini:489,llama:467,claude:479 },{ chatgpt:487,gemini:495,llama:472,claude:484 },{ chatgpt:491,gemini:499,llama:476,claude:488 }],
       'Atlanta Metro, GA':  [{ chatgpt:309,gemini:314,llama:299,claude:307 },{ chatgpt:316,gemini:321,llama:306,claude:314 },{ chatgpt:322,gemini:327,llama:312,claude:320 },{ chatgpt:325,gemini:330,llama:315,claude:323 },{ chatgpt:328,gemini:333,llama:318,claude:326 },{ chatgpt:331,gemini:336,llama:321,claude:329 }],
     },
-    // Flatbed: $2.61-3.17/mi (DAT 2024 flatbed spot). 50mi Ãƒâ€” $3.00 avg + loading = $452 LA Basin
+    // Flatbed: $2.61-3.17/mi (DAT 2024 flatbed spot). 50mi × $3.00 avg + loading = $452 LA Basin
     'flatbed': {
       'LA Basin, CA':       [{ chatgpt:439,gemini:446,llama:426,claude:437 },{ chatgpt:448,gemini:455,llama:435,claude:446 },{ chatgpt:457,gemini:465,llama:444,claude:455 },{ chatgpt:462,gemini:469,llama:448,claude:459 },{ chatgpt:466,gemini:473,llama:451,claude:463 },{ chatgpt:470,gemini:477,llama:456,claude:467 }],
       'Houston Metro, TX':  [{ chatgpt:370,gemini:375,llama:358,claude:367 },{ chatgpt:377,gemini:382,llama:365,claude:374 },{ chatgpt:385,gemini:391,llama:373,claude:383 },{ chatgpt:388,gemini:394,llama:376,claude:386 },{ chatgpt:392,gemini:398,llama:380,claude:390 },{ chatgpt:395,gemini:401,llama:383,claude:393 }],
       'NYC Metro, NY':      [{ chatgpt:511,gemini:519,llama:495,claude:508 },{ chatgpt:522,gemini:530,llama:505,claude:519 },{ chatgpt:532,gemini:540,llama:515,claude:529 },{ chatgpt:536,gemini:544,llama:519,claude:533 },{ chatgpt:542,gemini:550,llama:525,claude:539 },{ chatgpt:546,gemini:554,llama:529,claude:543 }],
       'Atlanta Metro, GA':  [{ chatgpt:342,gemini:347,llama:332,claude:340 },{ chatgpt:349,gemini:355,llama:339,claude:347 },{ chatgpt:356,gemini:362,llama:345,claude:354 },{ chatgpt:359,gemini:365,llama:349,claude:358 },{ chatgpt:362,gemini:368,llama:352,claude:361 },{ chatgpt:365,gemini:371,llama:354,claude:364 }],
     },
-    // Reefer: $2.88/mi avg (DAT 2024 reefer spot). 50mi Ãƒâ€” $2.88 + temp-control premium = $250 LA Basin
+    // Reefer: $2.88/mi avg (DAT 2024 reefer spot). 50mi × $2.88 + temp-control premium = $250 LA Basin
     'reefer': {
       'LA Basin, CA':       [{ chatgpt:243,gemini:247,llama:236,claude:242 },{ chatgpt:248,gemini:252,llama:241,claude:247 },{ chatgpt:253,gemini:257,llama:245,claude:252 },{ chatgpt:255,gemini:259,llama:247,claude:254 },{ chatgpt:258,gemini:262,llama:250,claude:257 },{ chatgpt:260,gemini:264,llama:252,claude:259 }],
       'Houston Metro, TX':  [{ chatgpt:203,gemini:207,llama:197,claude:202 },{ chatgpt:209,gemini:212,llama:202,claude:207 },{ chatgpt:213,gemini:216,llama:206,claude:211 },{ chatgpt:215,gemini:218,llama:208,claude:213 },{ chatgpt:217,gemini:220,llama:210,claude:215 },{ chatgpt:219,gemini:222,llama:212,claude:218 }],
@@ -857,7 +858,7 @@ const STATIC_RATES: Record<string, Record<string, Record<string, LLMRates[]>>> =
       'NYC Metro, NY':      [{ chatgpt:360,gemini:365,llama:348,claude:357 },{ chatgpt:367,gemini:372,llama:355,claude:365 },{ chatgpt:375,gemini:381,llama:363,claude:373 },{ chatgpt:378,gemini:384,llama:366,claude:376 },{ chatgpt:382,gemini:387,llama:370,claude:379 },{ chatgpt:385,gemini:391,llama:373,claude:383 }],
       'Atlanta Metro, GA':  [{ chatgpt:242,gemini:246,llama:235,claude:241 },{ chatgpt:247,gemini:251,llama:240,claude:246 },{ chatgpt:252,gemini:256,llama:245,claude:251 },{ chatgpt:254,gemini:258,llama:247,claude:253 },{ chatgpt:257,gemini:261,llama:249,claude:256 },{ chatgpt:259,gemini:263,llama:251,claude:258 }],
     },
-    // Tanker: $3.00-3.50/mi (premium specialty). 50mi Ãƒâ€” $3.25 avg + pump fees = $550 LA Basin
+    // Tanker: $3.00-3.50/mi (premium specialty). 50mi × $3.25 avg + pump fees = $550 LA Basin
     'tanker': {
       'LA Basin, CA':       [{ chatgpt:534,gemini:542,llama:517,claude:531 },{ chatgpt:546,gemini:554,llama:529,claude:543 },{ chatgpt:557,gemini:565,llama:540,claude:554 },{ chatgpt:561,gemini:569,llama:544,claude:558 },{ chatgpt:567,gemini:576,llama:550,claude:564 },{ chatgpt:572,gemini:581,llama:555,claude:569 }],
       'Houston Metro, TX':  [{ chatgpt:447,gemini:453,llama:433,claude:444 },{ chatgpt:457,gemini:464,llama:443,claude:454 },{ chatgpt:466,gemini:473,llama:452,claude:463 },{ chatgpt:470,gemini:477,llama:455,claude:467 },{ chatgpt:474,gemini:481,llama:459,claude:471 },{ chatgpt:479,gemini:486,llama:464,claude:476 }],
@@ -873,7 +874,7 @@ function medianOf4(a: number, b: number, c: number, d: number): number {
 }
 
 function fmtRate(n: number): string {
-  if (n === 0) return 'Ã¢â‚¬â€'
+  if (n === 0) return '—'
   if (n < 10) return `$${n.toFixed(2)}`
   return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
 }
@@ -881,7 +882,7 @@ function fmtRate(n: number): string {
 
 
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Last Mile line chart Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Last Mile line chart ──────────────────────────────────────────────────────
 
 const RATE_SHEET_BASE: Record<string, Record<string, { numeric: number; label: string }>> = {
   drayage: {
@@ -1160,7 +1161,7 @@ function MarketRateChart({
   )
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Pricing Intelligence component Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Pricing Intelligence component ────────────────────────────────────────────
 
 function PricingIntelligence() {
   const [service, setService] = useState<'drayage' | 'transloading' | 'last-mile'>('drayage')
@@ -1206,7 +1207,7 @@ function PricingIntelligence() {
         ))}
       </div>
 
-      {/* Month tabs Ã¢â‚¬â€ only for table view (drayage/transloading) */}
+      {/* Month tabs — only for table view (drayage/transloading) */}
       {service !== 'last-mile' && (
         <div className="flex gap-1.5 flex-wrap">
           {PRICING_MONTHS.map((m, i) => (
@@ -1263,7 +1264,7 @@ function PricingIntelligence() {
                           type="text"
                           value={pricingField.label}
                           readOnly
-                          placeholder="Ã¢â‚¬â€"
+                          placeholder="—"
                           className={`w-52 px-2 py-1 text-xs text-center font-mono border rounded-lg bg-[var(--color-bg)] transition-colors cursor-default ${yourRateColor(port, median) || 'border-[var(--color-border)] text-[var(--color-text-1)]'}`}
                         />
                       </td>
@@ -1291,10 +1292,18 @@ const ANALYTICS_PROMPTS = [
   'What are the top reasons for quote decline?',
 ]
 
+const QUOTE_FOLLOW_UP_PROMPTS = [
+  { label: '✓ Mark as Won', text: 'Mark this quote as won / accepted', status: 'won', color: 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' },
+  { label: '✗ Mark as Lost', text: 'Mark this quote as lost / declined', status: 'lost', color: 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100' },
+  { label: '✎ Request Revision', text: 'I need to revise or adjust this quote', status: 'revision-requested', color: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+  { label: '? Ask Follow-up', text: '', status: '', color: 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100' },
+]
+
 function Analytics({ userName }: { userName: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [replyTarget, setReplyTarget] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -1304,8 +1313,13 @@ function Analytics({ userName }: { userName: string }) {
   async function send(text: string) {
     if (!text.trim() || loading) return
     const userMsg: ChatMessage = { role: 'user', text: text.trim() }
-    setMessages(prev => [...prev, userMsg])
+    // Mark previous last assistant message as no longer showing actions
+    setMessages(prev => {
+      const updated = prev.map(m => ({ ...m, showActions: false }))
+      return [...updated, userMsg]
+    })
     setInput('')
+    setReplyTarget(null)
     setLoading(true)
 
     try {
@@ -1315,7 +1329,11 @@ function Analytics({ userName }: { userName: string }) {
         body: JSON.stringify({ question: text.trim() }),
       })
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', text: data.answer ?? 'Sorry, I could not generate an answer.' }])
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: data.answer ?? 'Sorry, I could not generate an answer.',
+        showActions: true,
+      }])
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', text: 'Analytics service unavailable. Please try again.' }])
     } finally {
@@ -1323,7 +1341,17 @@ function Analytics({ userName }: { userName: string }) {
     }
   }
 
+  function handleQuickAction(prompt: typeof QUOTE_FOLLOW_UP_PROMPTS[0]) {
+    if (prompt.text) {
+      send(prompt.text)
+    } else {
+      // "Ask Follow-up" — focus the input
+      setReplyTarget(messages.length - 1)
+    }
+  }
+
   const fn = (userName || 'there').split(' ')[0]
+  const lastAssistantIdx = messages.map((m, i) => m.role === 'assistant' ? i : -1).filter(i => i >= 0).at(-1) ?? -1
 
   return (
     <div className="flex flex-col h-[calc(100vh-260px)] min-h-[520px]">
@@ -1354,7 +1382,7 @@ function Analytics({ userName }: { userName: string }) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div
               className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed ${
                 m.role === 'user'
@@ -1364,6 +1392,24 @@ function Analytics({ userName }: { userName: string }) {
             >
               {m.text}
             </div>
+
+            {/* Reply actions — shown below the latest assistant message */}
+            {m.role === 'assistant' && i === lastAssistantIdx && m.showActions && !loading && (
+              <div className="mt-2 max-w-[80%]">
+                <p className="text-[11px] text-[var(--color-text-3)] mb-1.5 font-medium">Reply to this response:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUOTE_FOLLOW_UP_PROMPTS.map(p => (
+                    <button
+                      key={p.label}
+                      onClick={() => handleQuickAction(p)}
+                      className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${p.color}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {loading && (
@@ -1380,13 +1426,21 @@ function Analytics({ userName }: { userName: string }) {
         <div ref={bottomRef} />
       </div>
 
+      {/* Reply context indicator */}
+      {replyTarget !== null && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg mb-2 text-xs text-blue-700">
+          <span>Replying to AI response</span>
+          <button onClick={() => setReplyTarget(null)} className="ml-auto text-blue-400 hover:text-blue-600">✕</button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex gap-2">
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send(input)}
-          placeholder="Ask about pricing trends, win rates, customer analytics..."
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) } }}
+          placeholder={replyTarget !== null ? 'Type your follow-up question...' : 'Ask about pricing trends, win rates, customer analytics...'}
           disabled={loading}
           className="flex-1 px-4 py-2.5 text-sm border border-[var(--color-border)] rounded-xl bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 disabled:opacity-50"
         />
@@ -1402,7 +1456,7 @@ function Analytics({ userName }: { userName: string }) {
   )
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Main Panel Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Main Panel ────────────────────────────────────────────────────────────────
 
 interface CrmData {
   dashboard: { stats: DashboardStats; recentQuotes: RecentQuote[] } | null
@@ -1464,7 +1518,7 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
       }
       loaded.current.add(section)
     } catch {
-      // silently fail Ã¢â‚¬â€ seed data stays visible
+      // silently fail — seed data stays visible
       loaded.current.add(section)
     } finally {
       setLoading(prev => ({ ...prev, [section]: false }))
@@ -1504,7 +1558,7 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
           onClick={() => { loaded.current.delete(subTab); fetchSection(subTab) }}
           className="ml-auto text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)] flex items-center gap-1 border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg transition-colors"
         >
-          Ã¢â€ Â» Refresh
+          ↻ Refresh
         </button>
       </div>
 
@@ -1519,12 +1573,12 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
           {subTab === 'shipments' && 'Shipment Tracking'}
           {subTab === 'analytics' && 'AI Analytics'}
         </h1>
-        {subTab === 'pricing'   && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ Market rates, regional benchmarks & rate recommendations</span>}
-        {subTab === 'customers' && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ Accounts, contacts & customer tiers</span>}
-        {subTab === 'quotes' && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ Full quote pipeline & conversion tracking</span>}
-        {subTab === 'carriers' && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ MC#, DOT#, insurance & performance</span>}
-        {subTab === 'shipments' && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ Shipment ID tracking & delivery status</span>}
-        {subTab === 'analytics' && <span className="text-sm text-[var(--color-text-3)]">Ã¢â‚¬â€ Ask anything about your operations</span>}
+        {subTab === 'pricing'   && <span className="text-sm text-[var(--color-text-3)]">— Market rates, regional benchmarks & rate recommendations</span>}
+        {subTab === 'customers' && <span className="text-sm text-[var(--color-text-3)]">— Accounts, contacts & customer tiers</span>}
+        {subTab === 'quotes' && <span className="text-sm text-[var(--color-text-3)]">— Full quote pipeline & conversion tracking</span>}
+        {subTab === 'carriers' && <span className="text-sm text-[var(--color-text-3)]">— MC#, DOT#, insurance & performance</span>}
+        {subTab === 'shipments' && <span className="text-sm text-[var(--color-text-3)]">— Shipment ID tracking & delivery status</span>}
+        {subTab === 'analytics' && <span className="text-sm text-[var(--color-text-3)]">— Ask anything about your operations</span>}
       </div>
 
       {/* Content */}
