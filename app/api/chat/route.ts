@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email/send'
-import { createMessageThread, generateThreadId } from '@/lib/db/tables/thread'
+import { createMessageThread, generateThreadId, updateThreadProcessorType } from '@/lib/db/tables/thread'
 import { addArtifactToThread } from '@/lib/db/services/thread-service'
+import { createEmailThread, insertEmailMessage, normalizeSubject } from '@/lib/db/tables/email-thread'
+import { textToHtml } from '@/lib/llm/formatter'
+import { formatCurrency } from '@/lib/utils/currency'
 
 // ── Base rates (midpoint of static data) ──────────────────────────────────────
 
@@ -276,6 +279,184 @@ function buildRequestSummary(quote: {
   return details.filter(Boolean)
 }
 
+// ── Line-item builder ──────────────────────────────────────────────────────────
+
+interface LineItem {
+  category: string
+  description: string
+  amount: number
+}
+
+function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, subTypeLabel: string): LineItem[] {
+  const items: LineItem[] = []
+
+  if (args.service === 'drayage') {
+    const city = args.destination_city?.trim().toUpperCase() || args.port
+    items.push({ category: 'Base Rate', description: `Base Rate — ${city}`, amount: baseRate })
+
+    const weight = (args.container_weight ?? '').toLowerCase()
+    if (/very\s*heavy|super\s*heavy/.test(weight)) {
+      items.push({ category: 'Surcharge', description: 'Container Weight Surcharge (Very Heavy, 47,001+ lbs)', amount: 500 })
+    } else if (/\bheavy\b/.test(weight)) {
+      items.push({ category: 'Surcharge', description: 'Container Weight Surcharge (Heavy, 43,001–47,000 lbs)', amount: 250 })
+    }
+
+    for (const svc of (args.add_on_services ?? [])) {
+      const s = svc.toLowerCase()
+      if (/tcf|terminal.?clean/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Terminal Clean Fuel (TCF)', amount: 20 })
+      } else if (/pier.?pass|prepaid/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Prepaid Pier Pass', amount: 80 })
+      } else if (/chassis.?split|chassis/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Chassis Split', amount: 100 })
+      } else {
+        items.push({ category: 'Accessorial', description: svc, amount: 50 })
+      }
+    }
+  } else if (args.service === 'transloading') {
+    const qtyLabel = args.pallet_count != null
+      ? `${args.pallet_count} pallets`
+      : args.container_count != null
+      ? `${args.container_count} containers`
+      : `${args.quantity} ${args.quantity_unit}`
+    items.push({ category: 'Transloading', description: `${subTypeLabel} — ${qtyLabel} @ $${baseRate}/unit`, amount: subtotal })
+
+    for (const svc of (args.add_on_services ?? [])) {
+      const s = svc.toLowerCase()
+      if (/shrink.?wrap|shrink/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Shrink Wrap', amount: 150 })
+      } else if (/bol|bill.?of.?lading/.test(s)) {
+        items.push({ category: 'Documentation', description: 'BOL Preparation', amount: 35 })
+      } else if (/seal/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Container Seal', amount: 25 })
+      } else {
+        items.push({ category: 'Accessorial', description: svc, amount: 50 })
+      }
+    }
+  } else if (args.service === 'last-mile') {
+    const tripLabel = args.quantity === 1 ? '1 trip' : `${args.quantity} trips`
+    items.push({ category: 'Delivery', description: `${subTypeLabel} — ${tripLabel} @ $${baseRate}`, amount: subtotal })
+
+    for (const cond of (args.special_conditions ?? [])) {
+      const s = cond.toLowerCase()
+      if (/reefer|refriger|temp.?control/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Temperature Control (Reefer)', amount: 200 })
+      } else if (/hazmat|hazardous/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Hazmat Handling', amount: 150 })
+      } else if (/oversize|over.?size/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Oversize Handling', amount: 175 })
+      } else {
+        items.push({ category: 'Accessorial', description: cond, amount: 75 })
+      }
+    }
+    for (const svc of (args.add_on_services ?? [])) {
+      const s = svc.toLowerCase()
+      if (/insurance/.test(s)) {
+        items.push({ category: 'Accessorial', description: 'Cargo Insurance', amount: 75 })
+      } else {
+        items.push({ category: 'Accessorial', description: svc, amount: 50 })
+      }
+    }
+  }
+
+  return items
+}
+
+function buildQuoteEmailBody(quote: {
+  id: string; customer_name: string; service: string; service_label: string
+  sub_type_label: string; port: string; destination_city: string; container_weight: string
+  quantity: number; quantity_unit: string; container_count?: number; pallet_count?: number
+  add_on_services: string[]; special_conditions: string[]
+}, lineItems: LineItem[], total: number): string {
+  const fn = quote.customer_name.split(' ')[0] || quote.customer_name
+  const portDisplay = quote.port
+
+  // Service-specific intro
+  let intro: string
+  if (quote.service === 'drayage') {
+    const sizeMatch = quote.sub_type_label.match(/\d+/)
+    const size = sizeMatch ? `${sizeMatch[0]}-foot` : ''
+    const dest = (quote.destination_city || quote.port).toUpperCase()
+    const weightNote = quote.container_weight ? `, with a cargo weight of ${quote.container_weight}` : ''
+    intro = `We are pleased to provide you with a drayage quote for your ${size} container to ${dest}${weightNote}. Below is a detailed summary of the pricing for your request.`
+  } else if (quote.service === 'transloading') {
+    const qty = quote.pallet_count != null
+      ? `${quote.pallet_count} pallets`
+      : quote.container_count != null ? `${quote.container_count} containers` : `${quote.quantity} ${quote.quantity_unit}`
+    intro = `We are pleased to provide you with a transloading quote for ${qty} (${quote.sub_type_label}) at ${portDisplay}. Below is a detailed summary of the pricing.`
+  } else {
+    const tripLabel = quote.quantity === 1 ? '1 trip' : `${quote.quantity} trips`
+    intro = `We are pleased to provide you with a last-mile delivery quote for ${tripLabel} using a ${quote.sub_type_label} in the ${portDisplay} area. Below is a detailed summary of the pricing.`
+  }
+
+  // Table rows
+  const tableRows = lineItems
+    .map(item => `| ${item.category} | ${item.description} | ${formatCurrency(item.amount)} |`)
+    .join('\n')
+
+  // Basis for quote bullets
+  let basisBullets: string
+  if (quote.service === 'drayage') {
+    basisBullets = [
+      `Base rate includes standard port pickup from ${portDisplay} terminals.`,
+      `Container size: ${quote.sub_type_label}.`,
+      `Destination: ${(quote.destination_city || quote.port).toUpperCase()}.`,
+      ...(quote.container_weight ? [`Container weight: ${quote.container_weight}.`] : []),
+    ].map(b => `- ${b}`).join('\n')
+  } else if (quote.service === 'transloading') {
+    const qty = quote.pallet_count != null ? `${quote.pallet_count} pallet(s)` : quote.container_count != null ? `${quote.container_count} container(s)` : `${quote.quantity} ${quote.quantity_unit}`
+    const addOns = quote.add_on_services.length > 0 ? quote.add_on_services.join(', ') : 'None'
+    basisBullets = [
+      `Quote covers ${quote.sub_type_label} transloading at ${portDisplay}.`,
+      `Quantity: ${qty}.`,
+      `Add-on services included: ${addOns}.`,
+    ].map(b => `- ${b}`).join('\n')
+  } else {
+    const tripLabel = quote.quantity === 1 ? '1 trip' : `${quote.quantity} trips`
+    const conds = quote.special_conditions.length > 0 ? quote.special_conditions.join(', ') : 'None'
+    basisBullets = [
+      `Quote covers ${tripLabel} in the ${portDisplay} area using a ${quote.sub_type_label}.`,
+      `Special conditions: ${conds}.`,
+      ...(quote.add_on_services.length > 0 ? [`Additional services: ${quote.add_on_services.join(', ')}.`] : []),
+    ].map(b => `- ${b}`).join('\n')
+  }
+
+  const notesAndAssumptions = [
+    'Quote is based on standard port pickup from the terminal complex.',
+    'Rates are valid at the time of quotation and subject to change.',
+    'Any additional accessorials not listed above will be invoiced separately.',
+  ].map(n => `- ${n}`).join('\n')
+
+  return `Hi ${fn},
+
+Thank you for reaching out. ${intro}
+
+Quote Summary:
+
+| Category | Item | Amount (USD) |
+|---|---|---|
+${tableRows}
+| **Total** | | **${formatCurrency(total)}** |
+
+Total
+The grand total for this ${quote.service_label.toLowerCase()} service is ${formatCurrency(total)} USD. This amount reflects the sum of all line items listed in the table above.
+
+Basis for Quote
+${basisBullets}
+
+Notes & Assumptions
+${notesAndAssumptions}
+
+If you have any further questions or need additional services, please feel free to reach out.
+
+Best Regards,
+
+Jacob Hernandez
+Operations Lead
+FL Distribution
+(424) 555-0187`
+}
+
 async function handleGenerateQuote(args: QuoteArgs) {
   if (!args.customer_confirmed) {
     return {
@@ -293,15 +474,9 @@ async function handleGenerateQuote(args: QuoteArgs) {
 
   const serviceRates = RATES[args.service]?.[subTypeKey]
   const baseRate = serviceRates?.[portKey] ?? serviceRates?.[Object.keys(serviceRates ?? {})[0]] ?? 400
-
   const subtotal = Math.round(baseRate * args.quantity)
-  const fuelSurcharge = args.service === 'drayage' ? Math.round(subtotal * 0.12) : 0
-  const portFees = args.service === 'drayage' ? Math.round(subtotal * 0.08) : 0
-  const total = subtotal + fuelSurcharge + portFees
-
-  const quoteId = `Q-${Date.now().toString(36).toUpperCase()}`
   const serviceLabel = formatServiceLabel(args.service)
-  const unitSingular = args.quantity_unit.replace(/s$/, '')
+  const quoteId = `Q-${Date.now().toString(36).toUpperCase()}`
 
   const quote = {
     id: quoteId,
@@ -322,61 +497,78 @@ async function handleGenerateQuote(args: QuoteArgs) {
     special_conditions: specialConditions,
     base_rate: baseRate,
     subtotal,
-    fuel_surcharge: fuelSurcharge,
-    port_fees: portFees,
-    total,
     valid_days: 30,
   }
 
-  // Send email and create inbox thread (get thread ID back)
+  // Build line items and derive total from them
+  const lineItems = buildLineItems({ ...args, add_on_services: addOnServices, special_conditions: specialConditions }, baseRate, subtotal, subTypeLabel)
+  const total = lineItems.reduce((sum, item) => sum + item.amount, 0)
+
+  // Build standardised email body (same format as regular quote emails)
+  const emailBody = buildQuoteEmailBody(quote, lineItems, total)
+  const emailHtml = textToHtml(emailBody)
+  const subject = `${serviceLabel} Quote – ${quote.id} – FL Distribution`
+
+  // Send email and create inbox records (both email_threads and message_threads)
   const [threadId] = await Promise.all([
-    createInboxRecord(quote).catch(e => { console.error('[chat inbox]', e); return null }),
-    sendQuoteEmail(quote, unitSingular).catch(e => console.error('[chat email]', e)),
+    createInboxRecord(quote, total, emailBody, emailHtml, subject).catch(e => { console.error('[chat inbox]', e); return null }),
+    sendEmail({ to: quote.customer_email, subject, html: emailHtml, text: emailBody }).catch(e => console.error('[chat email]', e)),
   ])
 
-  const requestSummary = buildRequestSummary(quote)
-
+  // Chat summary lines
+  const lineItemLines = lineItems.map(item => `- ${item.category}: ${item.description} — **${formatCurrency(item.amount)}**`)
   const lines = [
     `Thank you, ${args.customer_name}! Your quote has been prepared and sent to **${args.customer_email}**.`,
     '',
-    `**Quote Reference: ${quoteId}**`,
-    threadId ? `**Thread ID: ${threadId}**` : '',
+    `**Quote: ${quoteId}**${threadId ? `  |  Thread: ${threadId}` : ''}`,
     '',
-    `**Request Summary:**`,
-    ...requestSummary.map(line => `- ${line}`),
+    `**Pricing Summary:**`,
+    ...lineItemLines,
+    `- **Total: ${formatCurrency(total)}**`,
     '',
-    `**Pricing Breakdown:**`,
-    `- Base rate: $${baseRate.toLocaleString()} per ${unitSingular}`,
-    ...(fuelSurcharge ? [`- Fuel surcharge (12%): $${fuelSurcharge.toLocaleString()}`] : []),
-    ...(portFees ? [`- Port fees (8%): $${portFees.toLocaleString()}`] : []),
-    `- **Total: $${total.toLocaleString()}**`,
-    '',
-    `A detailed quote has been sent to your email. Please review and reply with your **confirmation**, or let us know if you'd like any **revisions**. We look forward to supporting your shipment!`,
-  ].filter(line => line !== null)
+    `A detailed quote email has been sent. Please review and reply with your **confirmation** or any **revisions**. We look forward to supporting your shipment!`,
+  ]
 
-  return { message: lines.join('\n'), quote: { ...quote, thread_id: threadId } }
+  return { message: lines.join('\n'), quote: { ...quote, total, thread_id: threadId } }
 }
 
-async function createInboxRecord(quote: {
-  id: string; customer_name: string; customer_email: string
-  service: string; service_label: string; sub_type: string; port: string
-  quantity: number; quantity_unit: string; base_rate: number
-  subtotal: number; fuel_surcharge: number; port_fees: number; total: number
-}): Promise<string | null> {
+async function createInboxRecord(
+  quote: {
+    id: string; customer_name: string; customer_email: string
+    service: string; service_label: string; sub_type: string; sub_type_label?: string; port: string
+    destination_city?: string; container_weight?: string
+    quantity: number; quantity_unit: string; base_rate: number; subtotal: number
+    container_count?: number; pallet_count?: number
+    add_on_services?: string[]; special_conditions?: string[]
+  },
+  total: number,
+  emailBodyText: string,
+  emailBodyHtml: string,
+  subject: string,
+): Promise<string | null> {
   try {
     const tenantId = process.env.TENANT_ID
     const projectId = process.env.PROJECT_ID
+    const fromEmail = process.env.FROM_EMAIL ?? 'quote-agent@quotify.cc'
     if (!tenantId || !projectId) return null
 
     const threadId = generateThreadId()
+
+    // Normalize processor type so 'transloading' matches 'warehousing' in CRM analytics queries
+    const analyticsProcessorType = quote.service === 'transloading' ? 'warehousing' : quote.service
+
+    // Create message_thread record
     const thread = await createMessageThread({
       tenantId,
       projectId,
       threadId,
       intent: quote.service,
-      processorType: quote.service,
+      processorType: analyticsProcessorType,
       confidenceScore: 1.0,
     })
+
+    // Set quote_value so win-rate and revenue analytics are correctly calculated
+    await updateThreadProcessorType(thread.id, analyticsProcessorType, total)
 
     await addArtifactToThread({
       threadId: thread.id,
@@ -390,24 +582,68 @@ async function createInboxRecord(quote: {
         service: quote.service,
         serviceLabel: quote.service_label,
         subType: quote.sub_type,
-        subTypeLabel: (quote as { sub_type_label?: string }).sub_type_label,
+        subTypeLabel: quote.sub_type_label,
         port: quote.port,
-        destinationCity: (quote as { destination_city?: string }).destination_city,
-        containerWeight: (quote as { container_weight?: string }).container_weight,
+        destinationCity: quote.destination_city,
+        containerWeight: quote.container_weight,
         quantity: quote.quantity,
         quantityUnit: quote.quantity_unit,
-        containerCount: (quote as { container_count?: number }).container_count,
-        palletCount: (quote as { pallet_count?: number }).pallet_count,
-        addOnServices: (quote as { add_on_services?: string[] }).add_on_services,
-        specialConditions: (quote as { special_conditions?: string[] }).special_conditions,
+        containerCount: quote.container_count,
+        palletCount: quote.pallet_count,
+        addOnServices: quote.add_on_services,
+        specialConditions: quote.special_conditions,
         baseRate: quote.base_rate,
         subtotal: quote.subtotal,
-        fuelSurcharge: quote.fuel_surcharge,
-        portFees: quote.port_fees,
-        total: quote.total,
+        total,
         source: 'chatbot',
         status: 'awaiting-confirmation',
       },
+    })
+
+    // Also create an email_thread + two messages so it appears in the Message Inbox
+    const requestSummary = [
+      `Service: ${quote.service_label}`,
+      `Cargo / Vehicle: ${quote.sub_type_label ?? quote.sub_type}`,
+      `Port / Region: ${quote.port}`,
+      quote.destination_city ? `Destination: ${quote.destination_city}` : '',
+      quote.container_weight ? `Container weight: ${quote.container_weight}` : '',
+      quote.container_count != null ? `Containers: ${quote.container_count}` : '',
+      quote.pallet_count != null ? `Pallets: ${quote.pallet_count}` : '',
+      `Quantity: ${quote.quantity} ${quote.quantity_unit}`,
+      (quote.add_on_services?.length ?? 0) > 0 ? `Add-ons: ${quote.add_on_services!.join(', ')}` : '',
+      (quote.special_conditions?.length ?? 0) > 0 ? `Special conditions: ${quote.special_conditions!.join(', ')}` : '',
+    ].filter(Boolean).join('\n')
+
+    const inboundBody = `[QuotyAI Chatbot Quote Request — ${quote.id}]\n\nCustomer: ${quote.customer_name} <${quote.customer_email}>\n\n${requestSummary}`
+
+    const emailThread = await createEmailThread({
+      subject,
+      subjectNorm: normalizeSubject(subject),
+      participantFrom: quote.customer_email,
+      participantTo: fromEmail,
+      status: 'new',
+    })
+
+    // Inbound = customer's chatbot request
+    await insertEmailMessage({
+      threadId: emailThread.id,
+      direction: 'inbound',
+      fromEmail: quote.customer_email,
+      toEmail: fromEmail,
+      subject,
+      bodyText: inboundBody,
+      bodyHtml: null,
+    })
+
+    // Outbound = our generated quote response
+    await insertEmailMessage({
+      threadId: emailThread.id,
+      direction: 'outbound',
+      fromEmail,
+      toEmail: quote.customer_email,
+      subject,
+      bodyText: emailBodyText,
+      bodyHtml: emailBodyHtml,
     })
 
     return threadId
@@ -417,155 +653,3 @@ async function createInboxRecord(quote: {
   }
 }
 
-async function sendQuoteEmail(quote: {
-  id: string; customer_name: string; customer_email: string
-  service: string; service_label: string; sub_type: string; sub_type_label: string; port: string
-  destination_city: string; container_weight: string
-  quantity: number; quantity_unit: string; container_count?: number; pallet_count?: number
-  add_on_services: string[]; special_conditions: string[]
-  base_rate: number; subtotal: number; fuel_surcharge: number; port_fees: number; total: number; valid_days: number
-}, unitSingular: string) {
-  const requestSummary = buildRequestSummary(quote)
-  const summaryRows = requestSummary
-    .map(line => {
-      const colonIdx = line.indexOf(':')
-      const lbl = colonIdx > -1 ? line.slice(0, colonIdx).trim() : 'Detail'
-      const val = colonIdx > -1 ? line.slice(colonIdx + 1).trim() : line
-      return `<div class="row"><span class="lbl">${lbl}</span><span class="val">${val}</span></div>`
-    })
-    .join('')
-
-  const serviceIcon = quote.service === 'drayage' ? '🚢' : quote.service === 'transloading' ? '🏭' : '🚚'
-
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;margin:0;padding:24px 0}
-.wrap{max-width:660px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,.1)}
-.hdr{background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);padding:32px 36px}
-.hdr-top{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.hdr-icon{width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px}
-.hdr h1{color:#fff;margin:0;font-size:20px;font-weight:700;letter-spacing:-.3px}
-.hdr-sub{color:#bfdbfe;font-size:13px;margin:0}
-.qid-bar{background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 36px;display:flex;align-items:center;gap:16px}
-.qid-bar span{font-size:12px;color:#3b82f6;font-weight:600;font-family:monospace}
-.qid-bar .sep{color:#bfdbfe}
-.body{padding:30px 36px}
-.greeting{font-size:16px;color:#0f172a;margin:0 0 6px;font-weight:600}
-.intro-text{font-size:14px;color:#475569;line-height:1.7;margin:0 0 28px}
-.section{margin-bottom:24px}
-.sec-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.sec-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8}
-.sec-line{flex:1;height:1px;background:#e2e8f0}
-.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
-.row{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:10px 16px;border-bottom:1px solid #e2e8f0;font-size:13.5px}
-.row:last-child{border-bottom:none}
-.lbl{color:#64748b;font-weight:400;min-width:130px}
-.val{font-weight:600;color:#0f172a;text-align:right}
-.pricing-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
-.p-row{display:flex;justify-content:space-between;padding:9px 16px;border-bottom:1px solid #e2e8f0;font-size:13.5px}
-.p-row:last-child{border-bottom:none}
-.p-lbl{color:#64748b}.p-val{font-weight:500;color:#1e293b}
-.total-box{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);border-radius:12px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;margin-top:16px}
-.total-lbl{font-weight:600;color:#bfdbfe;font-size:14px}
-.total-val{font-weight:800;color:#fff;font-size:26px;letter-spacing:-.5px}
-.validity{display:inline-flex;align-items:center;gap:6px;background:#dcfce7;color:#15803d;font-size:12px;font-weight:600;padding:5px 14px;border-radius:999px;margin-top:14px}
-.cta-box{margin-top:24px;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 20px}
-.cta-title{font-size:14px;font-weight:700;color:#92400e;margin:0 0 6px}
-.cta-text{font-size:13px;color:#78350f;line-height:1.6;margin:0}
-.ftr{padding:20px 36px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center}
-.ftr p{font-size:12px;color:#94a3b8;margin:0 0 4px}
-</style></head>
-<body><div class="wrap">
-  <div class="hdr">
-    <div class="hdr-top">
-      <div class="hdr-icon">${serviceIcon}</div>
-      <div>
-        <h1>Freight Quote Ready — ${quote.service_label}</h1>
-        <p class="hdr-sub">QuoteonAI &nbsp;|&nbsp; Professional Logistics Quoting Platform</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="qid-bar">
-    <span>Quote: ${quote.id}</span>
-    <span class="sep">|</span>
-    <span>Service: ${quote.service_label}</span>
-    <span class="sep">|</span>
-    <span>Valid: ${quote.valid_days} days</span>
-  </div>
-
-  <div class="body">
-    <p class="greeting">Hi ${quote.customer_name},</p>
-    <p class="intro-text">
-      Thank you for choosing QuoteonAI. Your freight quote has been prepared and is outlined below. Please review the full details and pricing breakdown, then reply to confirm or request any adjustments.
-    </p>
-
-    <div class="section">
-      <div class="sec-header"><span class="sec-title">Request Summary</span><div class="sec-line"></div></div>
-      <div class="card">${summaryRows}</div>
-    </div>
-
-    <div class="section">
-      <div class="sec-header"><span class="sec-title">Pricing Breakdown</span><div class="sec-line"></div></div>
-      <div class="pricing-card">
-        <div class="p-row"><span class="p-lbl">Base rate</span><span class="p-val">$${quote.base_rate.toLocaleString()} per ${unitSingular}</span></div>
-        <div class="p-row"><span class="p-lbl">Billable quantity</span><span class="p-val">${quote.quantity} ${quote.quantity_unit}</span></div>
-        <div class="p-row"><span class="p-lbl">Subtotal</span><span class="p-val">$${quote.subtotal.toLocaleString()}</span></div>
-        ${quote.fuel_surcharge ? `<div class="p-row"><span class="p-lbl">Fuel surcharge (12%)</span><span class="p-val">$${quote.fuel_surcharge.toLocaleString()}</span></div>` : ''}
-        ${quote.port_fees ? `<div class="p-row"><span class="p-lbl">Port fees (8%)</span><span class="p-val">$${quote.port_fees.toLocaleString()}</span></div>` : ''}
-      </div>
-      <div class="total-box">
-        <span class="total-lbl">Total Quote Amount</span>
-        <span class="total-val">$${quote.total.toLocaleString()}</span>
-      </div>
-      <div><span class="validity">&#10003; Valid for ${quote.valid_days} days from today</span></div>
-    </div>
-
-    <div class="cta-box">
-      <p class="cta-title">Next Steps</p>
-      <p class="cta-text">
-        Please <strong>reply to this email</strong> with one of the following:
-        <br>&#10003; <strong>Confirm</strong> — to accept this quote and proceed with booking
-        <br>&#9998; <strong>Request Revision</strong> — if you need changes to scope or services
-        <br>&#10007; <strong>Decline</strong> — if you are not proceeding at this time
-      </p>
-    </div>
-  </div>
-
-  <div class="ftr">
-    <p>This quote was prepared by QuoteonAI on behalf of FL Distribution.</p>
-    <p>Please respond directly to this email. &copy; ${new Date().getFullYear()} QuoteonAI. All rights reserved.</p>
-  </div>
-</div></body></html>`
-
-  const text = [
-    `Hi ${quote.customer_name},`,
-    '',
-    'Thank you for reaching out. Please find your quote below.',
-    '',
-    `Quote ID: ${quote.id}`,
-    '',
-    'Request Summary:',
-    ...requestSummary.map(line => `- ${line}`),
-    '',
-    'Pricing Breakdown:',
-    `- Base rate: $${quote.base_rate.toLocaleString()} per ${unitSingular}`,
-    `- Billable quantity: ${quote.quantity} ${quote.quantity_unit}`,
-    `- Subtotal: $${quote.subtotal.toLocaleString()}`,
-    ...(quote.fuel_surcharge ? [`- Fuel surcharge: $${quote.fuel_surcharge.toLocaleString()}`] : []),
-    ...(quote.port_fees ? [`- Port fees: $${quote.port_fees.toLocaleString()}`] : []),
-    `- Total Quote: $${quote.total.toLocaleString()}`,
-    '',
-    `This quote is valid for ${quote.valid_days} days.`,
-    '',
-    'Thank you for the opportunity to support your shipment. Please reply to this email with your confirmation or let us know if you would like any revisions to the quoted scope.',
-  ].join('\n')
-
-  await sendEmail({
-    to: quote.customer_email,
-    subject: `Your QuoteonAI Freight Quote - ${quote.id}`,
-    html,
-    text,
-  })
-}

@@ -24,6 +24,34 @@ type ThreadRow = {
   created_at: string
 }
 
+// ── Extraction helpers ────────────────────────────────────────────────────────
+
+const GENERIC_DOMAINS = new Set(['gmail', 'yahoo', 'hotmail', 'outlook', 'icloud', 'aol', 'live', 'protonmail', 'mail', 'me', 'msn', 'ymail', 'googlemail'])
+
+function extractPhone(text: string): string | null {
+  const match = text.match(/(?:\+?1[-.\s]?)?(?:\(?[0-9]{3}\)?[-.\s]?)[0-9]{3}[-.\s]?[0-9]{4}/)
+  if (!match) return null
+  const digits = match[0].replace(/\D/g, '')
+  // Skip sequences that look like dates or IDs (e.g. 20260414)
+  if (digits.length < 10) return null
+  return match[0].trim()
+}
+
+function extractCompany(fromEmail: string): string | null {
+  const domainMatch = fromEmail.match(/@([^.]+)\./)
+  if (!domainMatch) return null
+  const domain = domainMatch[1].toLowerCase()
+  if (GENERIC_DOMAINS.has(domain)) return null
+  // Capitalise domain name as a best-effort company name
+  return domain.charAt(0).toUpperCase() + domain.slice(1)
+}
+
+/** For QuotyAI chatbot quote requests, parse the customer name from the body. */
+function extractChatbotCustomerName(body: string): string | null {
+  const match = body.match(/Customer:\s*([^<\n]+?)(?:\s*<|\s*$)/)
+  return match?.[1]?.trim() ?? null
+}
+
 export async function GET() {
   try {
     const threads = await sql`
@@ -65,10 +93,20 @@ export async function GET() {
               format: m.body_html ? 'html' : 'text',
             }))
 
+          const isChatbotQuote = firstInbound.body_text.startsWith('[QuotyAI')
+          const company = extractCompany(thread.participant_from)
+          const phone = extractPhone(firstInbound.body_text)
+          // For chatbot quotes show the customer's real name as the sender label
+          const senderName = isChatbotQuote
+            ? extractChatbotCustomerName(firstInbound.body_text)
+            : null
+
           return {
             id: thread.id,
             emailThreadId: thread.id,
-            from: thread.participant_from,
+            from: senderName
+              ? `${senderName} <${thread.participant_from}>`
+              : thread.participant_from,
             to: thread.participant_to,
             subject: thread.subject,
             body: firstInbound.body_text,
@@ -77,6 +115,8 @@ export async function GET() {
             isRead,
             responses,
             source: 'real',
+            company: company ?? undefined,
+            phone: phone ?? undefined,
           }
         })
       )

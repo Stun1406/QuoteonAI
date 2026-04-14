@@ -1293,33 +1293,50 @@ const ANALYTICS_PROMPTS = [
 ]
 
 const QUOTE_FOLLOW_UP_PROMPTS = [
-  { label: '✓ Mark as Won', text: 'Mark this quote as won / accepted', status: 'won', color: 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' },
-  { label: '✗ Mark as Lost', text: 'Mark this quote as lost / declined', status: 'lost', color: 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100' },
-  { label: '✎ Request Revision', text: 'I need to revise or adjust this quote', status: 'revision-requested', color: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
-  { label: '? Ask Follow-up', text: '', status: '', color: 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100' },
+  { label: '✓ Mark as Won', status: 'won', color: 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' },
+  { label: '✗ Mark as Lost', status: 'lost', color: 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100' },
+  { label: '✎ Request Revision', status: 'revision-requested', color: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+  { label: '? Ask Follow-up', status: '', color: 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100' },
 ]
+
+const STATUS_FRIENDLY: Record<string, string> = {
+  won: 'Won',
+  lost: 'Lost',
+  'revision-requested': 'Revision Requested',
+}
 
 function Analytics({ userName }: { userName: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [replyTarget, setReplyTarget] = useState<number | null>(null)
+  // Status action state
+  const [pendingAction, setPendingAction] = useState<{ status: string; label: string } | null>(null)
+  const [statusId, setStatusId] = useState('')
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [statusResult, setStatusResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const statusInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  useEffect(() => {
+    if (pendingAction) statusInputRef.current?.focus()
+  }, [pendingAction])
+
   async function send(text: string) {
     if (!text.trim() || loading) return
     const userMsg: ChatMessage = { role: 'user', text: text.trim() }
-    // Mark previous last assistant message as no longer showing actions
     setMessages(prev => {
       const updated = prev.map(m => ({ ...m, showActions: false }))
       return [...updated, userMsg]
     })
     setInput('')
     setReplyTarget(null)
+    setPendingAction(null)
+    setStatusResult(null)
     setLoading(true)
 
     try {
@@ -1341,12 +1358,51 @@ function Analytics({ userName }: { userName: string }) {
     }
   }
 
+  async function applyStatusAction() {
+    if (!pendingAction || !statusId.trim()) return
+    setStatusLoading(true)
+    setStatusResult(null)
+
+    const id = statusId.trim()
+    const isThread = id.startsWith('THR_')
+    const body: Record<string, string> = { status: pendingAction.status }
+    if (isThread) body.threadId = id
+    else body.quoteId = id
+
+    try {
+      const res = await fetch('/api/chat/quote/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        const friendlyStatus = STATUS_FRIENDLY[pendingAction.status] ?? pendingAction.status
+        setStatusResult({ ok: true, message: `${id} has been marked as ${friendlyStatus}.` })
+        // Notify the analytics AI so the conversation reflects the update
+        send(`${id} has been marked as ${friendlyStatus}. Please update the analytics summary accordingly.`)
+        setPendingAction(null)
+        setStatusId('')
+      } else {
+        setStatusResult({ ok: false, message: data.error ?? 'Could not update status. Check the ID and try again.' })
+      }
+    } catch {
+      setStatusResult({ ok: false, message: 'Network error. Please try again.' })
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
   function handleQuickAction(prompt: typeof QUOTE_FOLLOW_UP_PROMPTS[0]) {
-    if (prompt.text) {
-      send(prompt.text)
-    } else {
-      // "Ask Follow-up" — focus the input
+    if (!prompt.status) {
+      // "Ask Follow-up" — just focus the text input
       setReplyTarget(messages.length - 1)
+      setPendingAction(null)
+    } else {
+      // Status action — show inline ID input
+      setPendingAction({ status: prompt.status, label: prompt.label })
+      setStatusId('')
+      setStatusResult(null)
     }
   }
 
@@ -1395,19 +1451,58 @@ function Analytics({ userName }: { userName: string }) {
 
             {/* Reply actions — shown below the latest assistant message */}
             {m.role === 'assistant' && i === lastAssistantIdx && m.showActions && !loading && (
-              <div className="mt-2 max-w-[80%]">
-                <p className="text-[11px] text-[var(--color-text-3)] mb-1.5 font-medium">Reply to this response:</p>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="mt-2 w-full max-w-[85%]">
+                <p className="text-[11px] text-[var(--color-text-3)] mb-1.5 font-medium">Actions for this quote / response:</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   {QUOTE_FOLLOW_UP_PROMPTS.map(p => (
                     <button
                       key={p.label}
                       onClick={() => handleQuickAction(p)}
-                      className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${p.color}`}
+                      className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${p.color} ${
+                        pendingAction?.status === p.status ? 'ring-2 ring-offset-1 ring-blue-400' : ''
+                      }`}
                     >
                       {p.label}
                     </button>
                   ))}
                 </div>
+
+                {/* Inline status-update form */}
+                {pendingAction && (
+                  <div className="p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl">
+                    <p className="text-xs text-[var(--color-text-2)] mb-2 font-medium">
+                      {pendingAction.label} — Enter Quote ID <span className="text-[var(--color-text-3)] font-normal">(e.g. Q-1ABC123)</span> or Thread ID <span className="text-[var(--color-text-3)] font-normal">(e.g. THR_20260414_XYZ)</span>:
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <input
+                        ref={statusInputRef}
+                        value={statusId}
+                        onChange={e => { setStatusId(e.target.value); setStatusResult(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') applyStatusAction() }}
+                        placeholder="Quote ID or Thread ID"
+                        className="flex-1 min-w-[180px] px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-2)] text-[var(--color-text-1)] focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        onClick={applyStatusAction}
+                        disabled={!statusId.trim() || statusLoading}
+                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-medium disabled:opacity-40 hover:bg-blue-700 transition-colors"
+                      >
+                        {statusLoading ? 'Updating…' : 'Confirm'}
+                      </button>
+                      <button
+                        onClick={() => { setPendingAction(null); setStatusResult(null) }}
+                        className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-lg text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)] transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {statusResult && (
+                      <p className={`mt-1.5 text-xs font-medium ${statusResult.ok ? 'text-green-600' : 'text-red-500'}`}>
+                        {statusResult.ok ? '✓ ' : '✗ '}{statusResult.message}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1440,7 +1535,7 @@ function Analytics({ userName }: { userName: string }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) } }}
-          placeholder={replyTarget !== null ? 'Type your follow-up question...' : 'Ask about pricing trends, win rates, customer analytics...'}
+          placeholder={replyTarget !== null ? 'Type your follow-up question…' : 'Ask about pricing trends, win rates, customer analytics…'}
           disabled={loading}
           className="flex-1 px-4 py-2.5 text-sm border border-[var(--color-border)] rounded-xl bg-[var(--color-bg)] text-[var(--color-text-1)] focus:outline-none focus:border-blue-500 disabled:opacity-50"
         />
