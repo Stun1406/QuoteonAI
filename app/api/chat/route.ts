@@ -6,6 +6,15 @@ import { createEmailThread, insertEmailMessage, normalizeSubject } from '@/lib/d
 import { textToHtml } from '@/lib/llm/formatter'
 import { formatCurrency } from '@/lib/utils/currency'
 
+// ── Transloading base container-handling fees (per container) ─────────────────
+// Applied on top of the per-pallet unloading rate for regular / oversize types.
+const TRANSLOADING_CONTAINER_RATES: Record<string, number> = {
+  '20': 235,
+  '40': 335,
+  '45': 335,
+  '53': 335,
+}
+
 // ── Base rates (midpoint of static data) ──────────────────────────────────────
 
 const RATES: Record<string, Record<string, Record<string, number>>> = {
@@ -321,12 +330,34 @@ function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, sub
       }
     }
   } else if (args.service === 'transloading') {
-    const qtyLabel = args.pallet_count != null
-      ? `${args.pallet_count} pallets`
-      : args.container_count != null
-      ? `${args.container_count} containers`
-      : `${args.quantity} ${args.quantity_unit}`
-    items.push({ category: 'Transloading', description: `${subTypeLabel} — ${qtyLabel} @ $${baseRate}/unit`, amount: subtotal })
+    const stk = SUBTYPE_MAP[args.sub_type.toLowerCase()] ?? args.sub_type.toLowerCase()
+
+    if (stk === 'regular' || stk === 'oversize') {
+      // ── Row 1: base container-handling fee ──────────────────────────────────
+      const sizeMatch = subTypeLabel.match(/\((\d+)'?\)/)
+      const containerSize = sizeMatch?.[1] ?? '40'
+      const containerBaseRate = TRANSLOADING_CONTAINER_RATES[containerSize] ?? 335
+      const containerCount = args.container_count ?? 1
+      const containerTotal = containerBaseRate * containerCount
+      const containerDesc = containerCount > 1
+        ? `Container Handling (${containerSize}') — ${containerCount} containers @ $${containerBaseRate}`
+        : `Container Handling (${containerSize}') — Base Fee`
+      items.push({ category: 'Container', description: containerDesc, amount: containerTotal })
+
+      // ── Row 2: per-pallet unloading / palletisation ──────────────────────────
+      const palletCount = args.pallet_count ?? args.quantity
+      items.push({
+        category: 'Transloading',
+        description: `${subTypeLabel} — ${palletCount} pallets @ $${baseRate}/pallet`,
+        amount: subtotal,
+      })
+    } else {
+      // Loose cargo: flat per-container rate, no separate pallet charge
+      const qtyLabel = args.container_count != null
+        ? `${args.container_count} containers`
+        : `${args.quantity} ${args.quantity_unit}`
+      items.push({ category: 'Transloading', description: `${subTypeLabel} — ${qtyLabel} @ $${baseRate}/unit`, amount: subtotal })
+    }
 
     for (const svc of (args.add_on_services ?? [])) {
       const s = svc.toLowerCase()
@@ -411,11 +442,19 @@ function buildQuoteEmailBody(quote: {
       ...(quote.container_weight ? [`Container weight: ${quote.container_weight}.`] : []),
     ].map(b => `- ${b}`).join('\n')
   } else if (quote.service === 'transloading') {
-    const qty = quote.pallet_count != null ? `${quote.pallet_count} pallet(s)` : quote.container_count != null ? `${quote.container_count} container(s)` : `${quote.quantity} ${quote.quantity_unit}`
+    const palletQty = quote.pallet_count != null ? `${quote.pallet_count} pallet(s)` : null
+    const containerQty = quote.container_count != null ? `${quote.container_count} container(s)` : '1 container'
+    const sizeMatch = quote.sub_type_label.match(/\((\d+)'?\)/)
+    const containerSize = sizeMatch?.[1] ?? '40'
+    const containerBaseRate = TRANSLOADING_CONTAINER_RATES[containerSize] ?? 335
     const addOns = quote.add_on_services.length > 0 ? quote.add_on_services.join(', ') : 'None'
+    const isLooseCargo = quote.sub_type_label.toLowerCase().includes('loose cargo')
     basisBullets = [
       `Quote covers ${quote.sub_type_label} transloading at ${portDisplay}.`,
-      `Quantity: ${qty}.`,
+      isLooseCargo
+        ? `Quantity: ${containerQty}.`
+        : `Base container handling fee: $${containerBaseRate} per ${containerSize}' container (${containerQty}).`,
+      ...((!isLooseCargo && palletQty) ? [`Pallet unloading: ${palletQty} at the per-pallet rate for this port.`] : []),
       `Add-on services included: ${addOns}.`,
     ].map(b => `- ${b}`).join('\n')
   } else {
