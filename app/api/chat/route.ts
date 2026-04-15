@@ -72,9 +72,12 @@ function formatQuotedSubtype(service: string, subType: string): string {
   const key = SUBTYPE_MAP[subType.toLowerCase()] ?? subType.toLowerCase()
 
   if (service === 'transloading') {
-    if (key === 'regular') return 'Regular Container'
-    if (key === 'oversize') return 'Oversize Container'
-    if (key === 'loose-cargo') return 'Loose Cargo'
+    // Preserve the container size from the original label, e.g. "Regular Container (40')"
+    const sizeMatch = subType.match(/\((\d+)'?\)/)
+    const sizeSuffix = sizeMatch ? ` (${sizeMatch[1]}')` : ''
+    if (key === 'regular') return `Regular Container${sizeSuffix}`
+    if (key === 'oversize') return `Oversize Container${sizeSuffix}`
+    if (key === 'loose-cargo') return `Loose Cargo${sizeSuffix}`
   }
 
   if (service === 'drayage') {
@@ -127,7 +130,7 @@ Drayage flow:
 7. After confirmation, ask for full name and email.
 
 Last Mile flow:
-1. Ask for the metro region.
+1. Ask: "Could you please provide the metro region for the delivery pick-up?"
 2. Immediately after that, ask for the end destination city.
 3. Ask which vehicle type they need, and present all options: Straight Truck, Box Truck, or Sprinter Van.
 4. Ask for special conditions such as reefer, hazmat, or oversize handling.
@@ -141,7 +144,11 @@ General rules:
 - Never invent unofficial exact rates in conversation. Use generate_quote for the final quote.
 - If something is ambiguous, ask a short clarifying question.
 - In the confirmation recap, include every key detail the customer has provided so far.
-- After the quote is generated, thank the customer and ask them to review the email and reply with their confirmation or any revisions.`
+- After the quote is generated, thank the customer and ask them to review the email and reply with their confirmation or any revisions.
+
+Post-quote rules:
+- Once generate_quote has been called, the conversation is complete. Do NOT ask any follow-up questions.
+- If the customer accepts, confirms, acknowledges, or thanks you after the quote is generated, reply ONLY with a short warm closing message such as: "Wonderful! Your quote has been confirmed and the details are on their way to your inbox. Our team at FL Distribution will be in touch shortly. Thank you for choosing QuoteonAI!" Then stop — do not ask anything further.`
 
 // ── Tool definition ────────────────────────────────────────────────────────────
 
@@ -474,9 +481,26 @@ async function handleGenerateQuote(args: QuoteArgs) {
 
   const serviceRates = RATES[args.service]?.[subTypeKey]
   const baseRate = serviceRates?.[portKey] ?? serviceRates?.[Object.keys(serviceRates ?? {})[0]] ?? 400
-  const subtotal = Math.round(baseRate * args.quantity)
+
+  // For transloading regular/oversize the rate is per pallet, not per container.
+  // Loose cargo uses a flat per-container rate so falls back to args.quantity.
+  const billingQty = (
+    args.service === 'transloading' &&
+    (subTypeKey === 'regular' || subTypeKey === 'oversize') &&
+    args.pallet_count != null
+  ) ? args.pallet_count : args.quantity
+
+  const subtotal = Math.round(baseRate * billingQty)
   const serviceLabel = formatServiceLabel(args.service)
   const quoteId = `Q-${Date.now().toString(36).toUpperCase()}`
+
+  // Display quantity shown on the QuoteCard: for transloading show pallets, not containers
+  const displayQty = billingQty
+  const displayQtyUnit = (
+    args.service === 'transloading' &&
+    (subTypeKey === 'regular' || subTypeKey === 'oversize') &&
+    args.pallet_count != null
+  ) ? 'pallets' : args.quantity_unit
 
   const quote = {
     id: quoteId,
@@ -489,8 +513,8 @@ async function handleGenerateQuote(args: QuoteArgs) {
     port: portKey || args.port,
     destination_city: args.destination_city?.trim() || '',
     container_weight: args.container_weight?.trim() || '',
-    quantity: args.quantity,
-    quantity_unit: args.quantity_unit,
+    quantity: displayQty,
+    quantity_unit: displayQtyUnit,
     container_count: args.container_count,
     pallet_count: args.pallet_count,
     add_on_services: addOnServices,
