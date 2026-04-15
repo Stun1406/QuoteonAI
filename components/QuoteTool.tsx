@@ -75,6 +75,10 @@ type AiQueueItem = {
   subject: string
   originalBody: string
   draft: string
+  threadId?: string
+  conversation: Array<{ role: 'user' | 'ai'; text: string }>
+  sent: boolean
+  outcome?: 'won' | 'lost'
 }
 
 type PricingHistoryEntry = {
@@ -686,6 +690,8 @@ export default function QuoteTool() {
   // ── AI Queue ───────────────────────────────────────────────────────────────
   const [aiQueue, setAiQueue] = useState<AiQueueItem[]>([])
   const [queueDrafts, setQueueDrafts] = useState<Record<string, string>>({})
+  const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
+  const [replyLoading, setReplyLoading] = useState<Record<string, boolean>>({})
 
   // ── Drayage ────────────────────────────────────────────────────────────────
   const [dCity, setDCity] = useState('')
@@ -941,6 +947,7 @@ export default function QuoteTool() {
       const convertData = await convertRes.json()
 
       const email = emailId ? emails.find(e => e.id === emailId) : null
+      const initialDraft = convertData.markdown ?? convertData.plainText ?? ''
       const item: AiQueueItem = {
         id: uid(),
         emailId: emailId ?? '',
@@ -948,7 +955,10 @@ export default function QuoteTool() {
         from: email?.from ?? composeFrom,
         subject: email?.subject ?? composeSubject,
         originalBody: body,
-        draft: convertData.markdown ?? convertData.plainText ?? '',
+        draft: initialDraft,
+        threadId: processData.threadId,
+        conversation: [{ role: 'ai', text: initialDraft }],
+        sent: false,
       }
       setAiQueue(prev => [item, ...prev])
       setQueueDrafts(prev => ({ ...prev, [item.id]: item.draft }))
@@ -1034,12 +1044,88 @@ export default function QuoteTool() {
     }
 
     setSendingReply(null)
-    setAiQueue(prev => prev.filter(q => q.id !== item.id))
-    setQueueDrafts(prev => {
-      const next = { ...prev }
-      delete next[item.id]
-      return next
-    })
+    setAiQueue(prev => prev.map(q => q.id === item.id ? { ...q, sent: true } : q))
+  }
+
+  async function followUpRevise(itemId: string, userText: string) {
+    const item = aiQueue.find(q => q.id === itemId)
+    if (!item || !userText.trim()) return
+
+    setReplyLoading(prev => ({ ...prev, [itemId]: true }))
+    setReplyInputs(prev => ({ ...prev, [itemId]: '' }))
+    setReplyError(prev => { const n = { ...prev }; delete n[itemId]; return n })
+
+    // Optimistically append user message
+    setAiQueue(prev => prev.map(q => q.id === itemId
+      ? { ...q, conversation: [...q.conversation, { role: 'user' as const, text: userText }] }
+      : q
+    ))
+
+    try {
+      const processRes = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: userText, threadId: item.threadId }),
+      })
+      if (!processRes.ok) {
+        const errBody = await processRes.json().catch(() => ({}))
+        throw new Error((errBody as { error?: string }).error ?? `Process API returned ${processRes.status}`)
+      }
+      const processData = await processRes.json()
+
+      const convertRes = await fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: processData,
+          originalRequest: userText,
+          threadId: processData.threadUuid,
+        }),
+      })
+      if (!convertRes.ok) throw new Error(`Convert API returned ${convertRes.status}`)
+      const convertData = await convertRes.json()
+      const newDraft = convertData.markdown ?? convertData.plainText ?? ''
+
+      setAiQueue(prev => prev.map(q => q.id === itemId
+        ? {
+            ...q,
+            draft: newDraft,
+            threadId: processData.threadId ?? q.threadId,
+            conversation: [...q.conversation, { role: 'ai' as const, text: newDraft }],
+          }
+        : q
+      ))
+      setQueueDrafts(prev => ({ ...prev, [itemId]: newDraft }))
+    } catch (err) {
+      setReplyError(prev => ({ ...prev, [itemId]: err instanceof Error ? err.message : 'Revision failed' }))
+    } finally {
+      setReplyLoading(prev => ({ ...prev, [itemId]: false }))
+    }
+  }
+
+  async function markQuoteOutcome(item: AiQueueItem, outcome: 'won' | 'lost') {
+    if (item.threadId) {
+      try {
+        await fetch('/api/chat/quote/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: item.threadId, status: outcome }),
+        })
+      } catch {
+        // best-effort — don't block UI
+      }
+    }
+
+    setAiQueue(prev => prev.map(q => q.id === item.id ? { ...q, outcome } : q))
+
+    setTimeout(() => {
+      setAiQueue(prev => prev.filter(q => q.id !== item.id))
+      setQueueDrafts(prev => {
+        const next = { ...prev }
+        delete next[item.id]
+        return next
+      })
+    }, 2500)
   }
 
   // ── Drayage handler ────────────────────────────────────────────────────────
@@ -1560,16 +1646,28 @@ export default function QuoteTool() {
       <div className="space-y-4">
         {aiQueue.map(item => {
           const draft = queueDrafts[item.id] ?? item.draft
+          const isLoading = replyLoading[item.id] ?? false
+          const replyInput = replyInputs[item.id] ?? ''
           return (
             <Card key={item.id}>
+              {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-sm font-semibold text-[var(--color-text-1)]">{item.subject || '(No subject)'}</p>
                   <p className="text-xs text-[var(--color-text-3)] font-mono mt-0.5">{item.from}</p>
                 </div>
-                <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 font-medium">Pending Review</span>
+                {item.outcome ? (
+                  <span className={`text-xs px-2 py-1 rounded font-medium ${item.outcome === 'won' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {item.outcome === 'won' ? 'Won' : 'Lost'}
+                  </span>
+                ) : item.sent ? (
+                  <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">Sent — Awaiting Outcome</span>
+                ) : (
+                  <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 font-medium">Pending Review</span>
+                )}
               </div>
 
+              {/* Original message collapsible */}
               <details className="mb-4">
                 <summary className="text-xs font-medium text-[var(--color-text-3)] cursor-pointer hover:text-[var(--color-text-2)] uppercase tracking-wider">
                   Original Message
@@ -1579,46 +1677,144 @@ export default function QuoteTool() {
                 </div>
               </details>
 
-              <div className="mb-3">
-                <Label>AI Draft — Edit before sending</Label>
-                <Textarea
-                  rows={12}
-                  value={draft}
-                  onChange={e => setQueueDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                  className="font-mono text-xs"
-                />
-              </div>
+              {/* Conversation history */}
+              {item.conversation.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Conversation</p>
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {item.conversation.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[88%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap ${
+                          msg.role === 'user'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-[var(--color-bg-2)] text-[var(--color-text-1)] border border-[var(--color-border)]'
+                        }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                    {isLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-[var(--color-bg-2)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-3)] italic">
+                          Revising quote…
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-              <div className="flex items-center gap-3 flex-wrap">
-                <Btn
-                  onClick={() => confirmAndSend(item, draft)}
-                  disabled={sendingReply === item.id}
-                >
-                  {sendingReply === item.id
-                    ? 'Sending…'
-                    : (item.emailThreadId || (item.from && item.from !== 'anonymous@example.com'))
-                    ? 'Confirm & Send Email'
-                    : 'Confirm & Send to Inbox'}
-                </Btn>
-                {(item.emailThreadId || (item.from && item.from !== 'anonymous@example.com')) && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                    Will send via Resend to {item.from}
-                  </span>
-                )}
-                <CopyBtn
-                  getText={() => simpleMarkdownToHtml(draft)}
-                  label="Copy HTML"
-                />
-                <CopyBtn getText={() => draft} label="Copy Text" />
-                {!item.emailId && (
-                  <span className="text-xs text-[var(--color-text-3)]">
-                    (No source email — copy and send manually)
-                  </span>
-                )}
-                {replyError[item.id] && (
-                  <span className="text-xs text-red-600">Error: {replyError[item.id]}</span>
-                )}
-              </div>
+              {/* Draft editor — only when not yet sent */}
+              {!item.sent && (
+                <div className="mb-3">
+                  <Label>AI Draft — Edit before sending</Label>
+                  <Textarea
+                    rows={10}
+                    value={draft}
+                    onChange={e => setQueueDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              )}
+
+              {/* Follow-up / revision input — only when not yet sent */}
+              {!item.sent && (
+                <div className="mb-4">
+                  <Label>Ask a follow-up or request a revision</Label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 text-sm border border-[var(--color-border)] rounded-lg px-3 py-2 bg-[var(--color-bg-1)] text-[var(--color-text-1)] placeholder-[var(--color-text-3)] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="e.g. Add 30 days storage, reduce price by 5%, change container to 20'…"
+                      value={replyInput}
+                      onChange={e => setReplyInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          followUpRevise(item.id, replyInput)
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <Btn
+                      onClick={() => followUpRevise(item.id, replyInput)}
+                      disabled={isLoading || !replyInput.trim()}
+                    >
+                      {isLoading ? 'Revising…' : 'Revise'}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+
+              {/* Send / copy actions — only when not yet sent */}
+              {!item.sent && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Btn
+                    onClick={() => confirmAndSend(item, draft)}
+                    disabled={sendingReply === item.id || isLoading}
+                  >
+                    {sendingReply === item.id
+                      ? 'Sending…'
+                      : (item.emailThreadId || (item.from && item.from !== 'anonymous@example.com'))
+                      ? 'Confirm & Send Email'
+                      : 'Confirm & Send to Inbox'}
+                  </Btn>
+                  {(item.emailThreadId || (item.from && item.from !== 'anonymous@example.com')) && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                      Will send via Resend to {item.from}
+                    </span>
+                  )}
+                  <CopyBtn getText={() => simpleMarkdownToHtml(draft)} label="Copy HTML" />
+                  <CopyBtn getText={() => draft} label="Copy Text" />
+                  {!item.emailId && (
+                    <span className="text-xs text-[var(--color-text-3)]">(No source email — copy and send manually)</span>
+                  )}
+                </div>
+              )}
+
+              {/* Won / Lost outcome buttons — shown after sending, before outcome set */}
+              {item.sent && !item.outcome && (
+                <div className="border-t border-[var(--color-border)] pt-4 mt-2">
+                  <p className="text-xs text-[var(--color-text-3)] mb-3">
+                    Quote sent. Mark the outcome once the customer responds:
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => markQuoteOutcome(item, 'won')}
+                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                    >
+                      Won
+                    </button>
+                    <button
+                      onClick={() => markQuoteOutcome(item, 'lost')}
+                      className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+                    >
+                      Lost
+                    </button>
+                    <button
+                      onClick={() => setAiQueue(prev => prev.map(q => q.id === item.id ? { ...q, sent: false } : q))}
+                      className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)] underline"
+                    >
+                      Revise quote
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Outcome confirmation banner */}
+              {item.outcome && (
+                <div className={`border-t pt-4 mt-2 ${item.outcome === 'won' ? 'border-green-200' : 'border-red-200'}`}>
+                  <p className={`text-sm font-medium ${item.outcome === 'won' ? 'text-green-700' : 'text-red-600'}`}>
+                    {item.outcome === 'won'
+                      ? 'Quote won! Outcome recorded in CRM.'
+                      : 'Quote lost. Outcome recorded in CRM.'}
+                  </p>
+                </div>
+              )}
+
+              {replyError[item.id] && (
+                <p className="text-xs text-red-600 mt-2">Error: {replyError[item.id]}</p>
+              )}
             </Card>
           )
         })}
