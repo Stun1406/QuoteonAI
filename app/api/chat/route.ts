@@ -116,18 +116,19 @@ QuoteonAI service guidance:
 Conversation rules:
 - Ask one clear question at a time unless you are listing customer options.
 - Do not ask for the customer's name or email until AFTER you summarize the request and the customer confirms it is correct.
-- After the customer confirms the recap, ask for their full name and best email address.
-- Only call generate_quote after the customer has confirmed the recap and provided their contact details.
+- After the customer confirms the recap: first ask for their full name only. Once they provide their name, ask for their best email address in a separate message.
+- Only call generate_quote after the customer has confirmed the recap and provided both their name and email.
 - Keep the tone warm, courteous, and professional.
 
 Transloading flow:
 1. Ask for the port / warehouse location.
 2. Ask which cargo option they need, using the exact labels with size in brackets.
 3. Ask: "How many containers do you need for the transloading service?"
-4. Then ask: "How many pallets do you need for the transloading service?"
+4. If and only if the customer has already mentioned pallets, ask: "How many pallets are included?" Do NOT ask about pallet count if the customer has not brought up pallets — the base container-handling fee covers the service and pallet unloading is only charged when explicitly requested.
 5. Then courteously ask whether they need add-on services such as shrink wrap, BOL, and seal.
 6. Summarize the full request clearly and ask the customer to confirm it.
-7. After confirmation, ask for full name and email.
+7. After confirmation, ask for their full name.
+8. After they provide their name, ask for their best email address.
 
 Drayage flow:
 1. Ask for the port of origin.
@@ -136,7 +137,8 @@ Drayage flow:
 4. Ask for the end destination city, for example Carson or Ontario.
 5. Courteously ask whether they need additional elements such as TCF, prepaid pier pass, chassis split, or similar accessorials.
 6. Summarize the full request clearly and ask the customer to confirm it.
-7. After confirmation, ask for full name and email.
+7. After confirmation, ask for their full name.
+8. After they provide their name, ask for their best email address.
 
 Last Mile flow:
 1. Ask: "Could you please provide the metro region for the delivery pick-up?"
@@ -146,7 +148,8 @@ Last Mile flow:
 5. Courteously ask whether they need additional services such as insurance.
 6. Ask for the number of trips.
 7. Summarize the full request clearly and ask the customer to confirm it.
-8. After confirmation, ask for full name and email.
+8. After confirmation, ask for their full name.
+9. After they provide their name, ask for their best email address.
 
 General rules:
 - If a customer asks broad pricing questions, give only high-level guidance and explain that final pricing is sent after details are confirmed.
@@ -344,13 +347,14 @@ function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, sub
         : `Container Handling (${containerSize}') — Base Fee`
       items.push({ category: 'Container', description: containerDesc, amount: containerTotal })
 
-      // ── Row 2: per-pallet unloading / palletisation ──────────────────────────
-      const palletCount = args.pallet_count ?? args.quantity
-      items.push({
-        category: 'Transloading',
-        description: `${subTypeLabel} — ${palletCount} pallets @ $${baseRate}/pallet`,
-        amount: subtotal,
-      })
+      // ── Row 2: per-pallet unloading — only when pallet count was explicitly provided ──
+      if (args.pallet_count != null) {
+        items.push({
+          category: 'Transloading',
+          description: `${subTypeLabel} — ${args.pallet_count} pallets @ $${baseRate}/pallet`,
+          amount: subtotal,
+        })
+      }
     } else {
       // Loose cargo: flat per-container rate, no separate pallet charge
       const qtyLabel = args.container_count != null
