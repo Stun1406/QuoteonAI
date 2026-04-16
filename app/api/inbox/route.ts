@@ -102,8 +102,23 @@ function extractChatbotCustomerName(body: string): string | null {
   return match?.[1]?.trim() ?? null
 }
 
+// Lazily add process_thread_id column the first time GET is called.
+// ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent — instant no-op once the column exists.
+let _processThreadColReady = false
+async function ensureProcessThreadIdColumn() {
+  if (_processThreadColReady) return
+  try {
+    await sql`ALTER TABLE email_threads ADD COLUMN IF NOT EXISTS process_thread_id TEXT`
+    _processThreadColReady = true
+  } catch {
+    // Non-fatal — column may already exist or DB unavailable; SELECT will surface any real error
+  }
+}
+
 export async function GET() {
   try {
+    await ensureProcessThreadIdColumn()
+
     const threads = await sql`
       SELECT id, subject, participant_from, participant_to, status, last_message_at, created_at, process_thread_id
       FROM email_threads
