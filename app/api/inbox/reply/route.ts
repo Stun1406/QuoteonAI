@@ -6,12 +6,13 @@ import { textToHtml } from '@/lib/llm/formatter'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { to, subject, text, html, emailThreadId } = body as {
+    const { to, subject, text, html, emailThreadId, processThreadId } = body as {
       to: string
       subject?: string
       text: string
       html?: string
       emailThreadId?: string
+      processThreadId?: string
     }
 
     if (!to || !text) {
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
           SET status = 'replied', last_message_at = NOW(), updated_at = NOW()
           WHERE id = ${emailThreadId}
         `
+        if (processThreadId) {
+          await sql`
+            UPDATE email_threads
+            SET process_thread_id = ${processThreadId}
+            WHERE id = ${emailThreadId}
+          `
+        }
       } catch (dbErr) {
         // Email was still sent — just log the DB failure
         console.error('[/api/inbox/reply] DB record error (email was sent):', dbErr)

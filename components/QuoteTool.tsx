@@ -1003,6 +1003,7 @@ export default function QuoteTool() {
             text: draft,
             html: simpleMarkdownToHtml(draft),
             emailThreadId: item.emailThreadId,
+            processThreadId: item.threadId,
           }),
         })
         if (!res.ok) {
@@ -1197,6 +1198,7 @@ export default function QuoteTool() {
               text: aiDraft,
               html: simpleMarkdownToHtml(aiDraft),
               emailThreadId: currentEmail.emailThreadId,
+              processThreadId: processData.threadId ?? currentEmail.processThreadId,
             }),
           })
         } catch { /* non-fatal */ }

@@ -22,6 +22,7 @@ type ThreadRow = {
   status: string
   last_message_at: string
   created_at: string
+  process_thread_id: string | null
 }
 
 // ── Extraction helpers ────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ function extractChatbotCustomerName(body: string): string | null {
 export async function GET() {
   try {
     const threads = await sql`
-      SELECT id, subject, participant_from, participant_to, status, last_message_at, created_at
+      SELECT id, subject, participant_from, participant_to, status, last_message_at, created_at, process_thread_id
       FROM email_threads
       ORDER BY last_message_at DESC
       LIMIT 100
@@ -166,6 +167,7 @@ export async function GET() {
             source: 'real',
             company: company ?? undefined,
             phone: phone ?? undefined,
+            processThreadId: thread.process_thread_id ?? undefined,
           }
         })
       )
