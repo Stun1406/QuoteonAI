@@ -5,6 +5,15 @@ import { verifyWebhookSignature, generateCanonicalId } from '@/lib/verify-webhoo
 import { logEmailFailure } from '@/lib/email-failure-log'
 import { storeEmail } from '@/lib/email-store'
 import { resolveThreadForInbound, insertInboundEmailMessage, findEmailMessageByCanonicalId } from '@/lib/db/tables/email-thread'
+import { sql } from '@/lib/db/client'
+
+// ── Quote outcome detection ───────────────────────────────────────────────────
+function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
+  const t = text.toLowerCase()
+  if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed)\b/.test(t)) return 'won'
+  if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high)\b/.test(t)) return 'lost'
+  return null
+}
 
 // Support both multipart/form-data (Cloudflare worker) and application/json
 async function parsePayload(req: NextRequest): Promise<{
@@ -165,6 +174,25 @@ export async function POST(req: NextRequest) {
     })
 
     console.log(`[webhook/email] Stored email id=${emailMsg.id} thread=${emailThread.id}`)
+
+    // Auto-detect quote acceptance/rejection from email chain replies
+    try {
+      const ptRows = await sql`SELECT process_thread_id FROM email_threads WHERE id = ${emailThread.id}` as Array<{ process_thread_id?: string }>
+      const processThreadId = ptRows[0]?.process_thread_id
+      if (processThreadId && bodyText) {
+        const outboundRows = await sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'outbound'` as Array<{ count: number }>
+        if ((outboundRows[0]?.count ?? 0) > 0) {
+          const outcome = detectQuoteOutcome(bodyText)
+          if (outcome) {
+            await sql`UPDATE message_threads SET status = ${outcome}, closed_at = NOW(), updated_at = NOW() WHERE thread_id = ${processThreadId}`
+            console.log(`[webhook/email] Auto-detected quote outcome: ${outcome} for thread ${processThreadId}`)
+          }
+        }
+      }
+    } catch (outcomeErr) {
+      console.error('[webhook/email] Outcome detection failed (non-fatal):', outcomeErr)
+    }
+
     return NextResponse.json({ status: 'created', id: emailMsg.id, canonicalId })
 
   } catch (err) {

@@ -3,6 +3,7 @@ import { sendEmail } from '@/lib/email/send'
 import { createMessageThread, generateThreadId, updateThreadProcessorType } from '@/lib/db/tables/thread'
 import { addArtifactToThread } from '@/lib/db/services/thread-service'
 import { createEmailThread, insertEmailMessage, normalizeSubject } from '@/lib/db/tables/email-thread'
+import { sql } from '@/lib/db/client'
 import { textToHtml } from '@/lib/llm/formatter'
 import { formatCurrency } from '@/lib/utils/currency'
 
@@ -124,7 +125,9 @@ Transloading flow:
 1. Ask for the port / warehouse location.
 2. Ask which cargo option they need, using the exact labels with size in brackets.
 3. Ask: "How many containers do you need for the transloading service?"
-4. If and only if the customer has already mentioned pallets, ask: "How many pallets are included?" Do NOT ask about pallet count if the customer has not brought up pallets — the base container-handling fee covers the service and pallet unloading is only charged when explicitly requested.
+4. Always ask this next question (mandatory):
+   - For Regular Container or Oversize Container types: "How many pallets are included in the container(s)?"
+   - For Loose Cargo types: "How many loose cargo pieces are there?"
 5. Then courteously ask whether they need add-on services such as shrink wrap, BOL, and seal.
 6. Summarize the full request clearly and ask the customer to confirm it.
 7. After confirmation, ask for their full name.
@@ -356,11 +359,12 @@ function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, sub
         })
       }
     } else {
-      // Loose cargo: flat per-container rate, no separate pallet charge
+      // Loose cargo: flat per-container rate
       const qtyLabel = args.container_count != null
-        ? `${args.container_count} containers`
+        ? `${args.container_count} container${args.container_count > 1 ? 's' : ''}`
         : `${args.quantity} ${args.quantity_unit}`
-      items.push({ category: 'Transloading', description: `${subTypeLabel} — ${qtyLabel} @ $${baseRate}/unit`, amount: subtotal })
+      const pieceInfo = args.pallet_count != null ? ` (${args.pallet_count} pieces)` : ''
+      items.push({ category: 'Transloading', description: `${subTypeLabel} — ${qtyLabel}${pieceInfo} @ $${baseRate}/container`, amount: subtotal })
     }
 
     for (const svc of (args.add_on_services ?? [])) {
@@ -712,6 +716,13 @@ async function createInboxRecord(
       bodyText: emailBodyText,
       bodyHtml: emailBodyHtml,
     })
+
+    // Link email thread to message thread so operators see the follow-up window
+    await sql`
+      UPDATE email_threads
+      SET process_thread_id = ${threadId}
+      WHERE id = ${emailThread.id}
+    `.catch(() => {/* column may not exist yet — non-fatal */})
 
     return threadId
   } catch {

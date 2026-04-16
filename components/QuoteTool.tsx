@@ -1146,6 +1146,14 @@ export default function QuoteTool() {
     }, 2500)
   }
 
+  // ── Quote outcome detection from natural language ─────────────────────────
+  function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
+    const t = text.toLowerCase()
+    if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|great|we'?ll take it|happy to proceed)\b/.test(t)) return 'won'
+    if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high)\b/.test(t)) return 'lost'
+    return null
+  }
+
   // ── Inbox AI follow-up reply ───────────────────────────────────────────────
   async function sendInboxAiReply(emailId: string, userText: string) {
     if (!userText.trim()) return
@@ -1205,16 +1213,30 @@ export default function QuoteTool() {
       }
 
       const aiNow = new Date().toISOString()
+      const resolvedThreadId = processData.threadId ?? currentEmail.processThreadId
       setEmails(prev => prev.map(e => e.id !== emailId ? e : {
         ...e,
         status: 'responded' as const,
-        processThreadId: processData.threadId ?? e.processThreadId,
+        processThreadId: resolvedThreadId,
         responses: [
           ...e.responses.filter(r => r.id !== userMsgId),
           { id: userMsgId, body: userText, sentAt: now, role: 'user' as const, format: 'text' as const },
           { id: uid(), body: aiDraft, sentAt: aiNow, role: 'ai' as const, format: 'text' as const },
         ],
       }))
+
+      // Auto-detect acceptance or rejection from the customer's message
+      const outcome = detectQuoteOutcome(userText)
+      if (outcome && resolvedThreadId) {
+        try {
+          await fetch('/api/chat/quote/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: resolvedThreadId, status: outcome }),
+          })
+        } catch { /* best-effort */ }
+        setEmails(prev => prev.map(e => e.id !== emailId ? e : { ...e, quoteOutcome: outcome }))
+      }
     } catch (err) {
       // Remove optimistic message on error
       setEmails(prev => prev.map(e => e.id !== emailId ? e : {
@@ -1727,60 +1749,40 @@ export default function QuoteTool() {
                 {/* Reply Actions */}
                 <div className="border-t border-[var(--color-border)] pt-4">
                   {selectedEmail.processThreadId ? (
-                    // Active quote thread — follow-up replies + outcome
+                    // Active quote thread — follow-up replies
                     <div className="space-y-4">
-                      {/* Won / Lost outcome */}
-                      {selectedEmail.quoteOutcome ? (
+                      {/* Auto-detected outcome badge (no manual buttons) */}
+                      {selectedEmail.quoteOutcome && (
                         <div className={`inline-flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg ${selectedEmail.quoteOutcome === 'won' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          <span>{selectedEmail.quoteOutcome === 'won' ? 'Quote Won' : 'Quote Lost'}</span>
+                          <span>{selectedEmail.quoteOutcome === 'won' ? 'Quote Accepted' : 'Quote Declined'}</span>
                           <span className="text-xs font-normal opacity-70">— recorded in CRM</span>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Quote Outcome</p>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => markInboxQuoteOutcome(selectedEmail.id, selectedEmail.processThreadId, 'won')}
-                              className="px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
-                            >
-                              Won
-                            </button>
-                            <button
-                              onClick={() => markInboxQuoteOutcome(selectedEmail.id, selectedEmail.processThreadId, 'lost')}
-                              className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
-                            >
-                              Lost
-                            </button>
-                          </div>
                         </div>
                       )}
 
-                      {/* Customer follow-up input */}
-                      {!selectedEmail.quoteOutcome && (
-                        <div>
-                          <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Customer Follow-up Reply</p>
-                          <div className="space-y-2">
-                            <Textarea
-                              rows={3}
-                              value={inboxFollowUp[selectedEmail.id] ?? ''}
-                              onChange={e => setInboxFollowUp(prev => ({ ...prev, [selectedEmail.id]: e.target.value }))}
-                              placeholder="Type the customer's follow-up (e.g. 'Can you reduce by 10%?' or 'Add 30 days storage')…"
-                              disabled={inboxFollowUpLoading[selectedEmail.id]}
-                            />
-                            <div className="flex items-center gap-3">
-                              <Btn
-                                onClick={() => sendInboxAiReply(selectedEmail.id, inboxFollowUp[selectedEmail.id] ?? '')}
-                                disabled={inboxFollowUpLoading[selectedEmail.id] || !(inboxFollowUp[selectedEmail.id] ?? '').trim()}
-                              >
-                                {inboxFollowUpLoading[selectedEmail.id] ? 'Processing…' : 'Send & AI Reply'}
-                              </Btn>
-                              {inboxFollowUpError[selectedEmail.id] && (
-                                <span className="text-xs text-red-600">{inboxFollowUpError[selectedEmail.id]}</span>
-                              )}
-                            </div>
+                      {/* Customer follow-up input — always visible while thread is active */}
+                      <div>
+                        <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Customer Follow-up Reply</p>
+                        <div className="space-y-2">
+                          <Textarea
+                            rows={3}
+                            value={inboxFollowUp[selectedEmail.id] ?? ''}
+                            onChange={e => setInboxFollowUp(prev => ({ ...prev, [selectedEmail.id]: e.target.value }))}
+                            placeholder="Type the customer's reply (e.g. 'I accept the quote', 'Can you reduce by 10%?', 'Add 30 days storage')…"
+                            disabled={inboxFollowUpLoading[selectedEmail.id]}
+                          />
+                          <div className="flex items-center gap-3">
+                            <Btn
+                              onClick={() => sendInboxAiReply(selectedEmail.id, inboxFollowUp[selectedEmail.id] ?? '')}
+                              disabled={inboxFollowUpLoading[selectedEmail.id] || !(inboxFollowUp[selectedEmail.id] ?? '').trim()}
+                            >
+                              {inboxFollowUpLoading[selectedEmail.id] ? 'Processing…' : 'Send & AI Reply'}
+                            </Btn>
+                            {inboxFollowUpError[selectedEmail.id] && (
+                              <span className="text-xs text-red-600">{inboxFollowUpError[selectedEmail.id]}</span>
+                            )}
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   ) : (
                     // No quote thread yet
