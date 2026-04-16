@@ -65,6 +65,8 @@ type MockEmail = {
   isRead?: boolean
   source?: 'real' | 'mock'
   emailThreadId?: string
+  processThreadId?: string
+  quoteOutcome?: 'won' | 'lost'
 }
 
 type AiQueueItem = {
@@ -692,6 +694,9 @@ export default function QuoteTool() {
   const [queueDrafts, setQueueDrafts] = useState<Record<string, string>>({})
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [replyLoading, setReplyLoading] = useState<Record<string, boolean>>({})
+  const [inboxFollowUp, setInboxFollowUp] = useState<Record<string, string>>({})
+  const [inboxFollowUpLoading, setInboxFollowUpLoading] = useState<Record<string, boolean>>({})
+  const [inboxFollowUpError, setInboxFollowUpError] = useState<Record<string, string>>({})
 
   // ── Drayage ────────────────────────────────────────────────────────────────
   const [dCity, setDCity] = useState('')
@@ -871,9 +876,16 @@ export default function QuoteTool() {
       const { emails: realEmails } = await res.json() as { emails: MockEmail[] }
       setEmails(prev => {
         const mockEmails = prev.filter(e => !e.source || e.source === 'mock')
+        const prevRealMap = new Map(prev.filter(e => e.source === 'real').map(e => [e.id, e]))
         const realIds = new Set(realEmails.map(e => e.id))
         const dedupedMocks = mockEmails.filter(e => !realIds.has(e.id))
-        return [...realEmails, ...dedupedMocks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        // Preserve in-session state (processThreadId, quoteOutcome) that isn't stored in DB
+        const mergedReal = realEmails.map(e => ({
+          ...e,
+          processThreadId: prevRealMap.get(e.id)?.processThreadId ?? e.processThreadId,
+          quoteOutcome: prevRealMap.get(e.id)?.quoteOutcome ?? e.quoteOutcome,
+        }))
+        return [...mergedReal, ...dedupedMocks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       })
     } catch {
       // API unavailable — keep showing mock emails only
@@ -1044,7 +1056,12 @@ export default function QuoteTool() {
     }
 
     setSendingReply(null)
-    setAiQueue(prev => prev.map(q => q.id === item.id ? { ...q, sent: true } : q))
+    // Store the process thread ID on the email so follow-ups can continue in the inbox
+    if (item.emailId) {
+      setEmails(prev => prev.map(e => e.id !== item.emailId ? e : { ...e, processThreadId: item.threadId }))
+    }
+    setAiQueue(prev => prev.filter(q => q.id !== item.id))
+    setQueueDrafts(prev => { const next = { ...prev }; delete next[item.id]; return next })
   }
 
   async function followUpRevise(itemId: string, userText: string) {
@@ -1126,6 +1143,99 @@ export default function QuoteTool() {
         return next
       })
     }, 2500)
+  }
+
+  // ── Inbox AI follow-up reply ───────────────────────────────────────────────
+  async function sendInboxAiReply(emailId: string, userText: string) {
+    if (!userText.trim()) return
+    const currentEmail = emails.find(e => e.id === emailId)
+    if (!currentEmail?.processThreadId) return
+
+    setInboxFollowUpLoading(prev => ({ ...prev, [emailId]: true }))
+    setInboxFollowUpError(prev => { const n = { ...prev }; delete n[emailId]; return n })
+    setInboxFollowUp(prev => ({ ...prev, [emailId]: '' }))
+
+    const now = new Date().toISOString()
+    const userMsgId = uid()
+
+    // Optimistically add customer message to thread
+    setEmails(prev => prev.map(e => e.id !== emailId ? e : {
+      ...e,
+      responses: [...e.responses, { id: userMsgId, body: userText, sentAt: now, role: 'user' as const, format: 'text' as const }],
+    }))
+
+    try {
+      const processRes = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: userText, threadId: currentEmail.processThreadId }),
+      })
+      if (!processRes.ok) {
+        const errBody = await processRes.json().catch(() => ({}))
+        throw new Error((errBody as { error?: string }).error ?? `Process API returned ${processRes.status}`)
+      }
+      const processData = await processRes.json()
+
+      const convertRes = await fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: processData, originalRequest: userText, threadId: processData.threadUuid }),
+      })
+      if (!convertRes.ok) throw new Error(`Convert API returned ${convertRes.status}`)
+      const convertData = await convertRes.json()
+      const aiDraft = convertData.markdown ?? convertData.plainText ?? ''
+
+      // Send via email if we have a thread ID
+      if (currentEmail.emailThreadId) {
+        try {
+          await fetch('/api/inbox/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: currentEmail.from,
+              subject: currentEmail.subject,
+              text: aiDraft,
+              html: simpleMarkdownToHtml(aiDraft),
+              emailThreadId: currentEmail.emailThreadId,
+            }),
+          })
+        } catch { /* non-fatal */ }
+      }
+
+      const aiNow = new Date().toISOString()
+      setEmails(prev => prev.map(e => e.id !== emailId ? e : {
+        ...e,
+        status: 'responded' as const,
+        processThreadId: processData.threadId ?? e.processThreadId,
+        responses: [
+          ...e.responses.filter(r => r.id !== userMsgId),
+          { id: userMsgId, body: userText, sentAt: now, role: 'user' as const, format: 'text' as const },
+          { id: uid(), body: aiDraft, sentAt: aiNow, role: 'ai' as const, format: 'text' as const },
+        ],
+      }))
+    } catch (err) {
+      // Remove optimistic message on error
+      setEmails(prev => prev.map(e => e.id !== emailId ? e : {
+        ...e,
+        responses: e.responses.filter(r => r.id !== userMsgId),
+      }))
+      setInboxFollowUpError(prev => ({ ...prev, [emailId]: err instanceof Error ? err.message : 'Reply failed' }))
+    } finally {
+      setInboxFollowUpLoading(prev => ({ ...prev, [emailId]: false }))
+    }
+  }
+
+  async function markInboxQuoteOutcome(emailId: string, processThreadId: string | undefined, outcome: 'won' | 'lost') {
+    if (processThreadId) {
+      try {
+        await fetch('/api/chat/quote/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: processThreadId, status: outcome }),
+        })
+      } catch { /* best-effort */ }
+    }
+    setEmails(prev => prev.map(e => e.id !== emailId ? e : { ...e, quoteOutcome: outcome }))
   }
 
   // ── Drayage handler ────────────────────────────────────────────────────────
@@ -1614,16 +1724,77 @@ export default function QuoteTool() {
 
                 {/* Reply Actions */}
                 <div className="border-t border-[var(--color-border)] pt-4">
-                  <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-3">Reply Actions</p>
-                  <div className="flex items-center gap-3">
-                    <Btn
-                      onClick={() => sendToAiQuote(selectedEmail.body, selectedEmail.id)}
-                      disabled={inboxLoading}
-                    >
-                      {inboxLoading ? 'Processing…' : 'Answer with AI Quote'}
-                    </Btn>
-                    {inboxError && <span className="text-xs text-red-600">{inboxError}</span>}
-                  </div>
+                  {selectedEmail.processThreadId ? (
+                    // Active quote thread — follow-up replies + outcome
+                    <div className="space-y-4">
+                      {/* Won / Lost outcome */}
+                      {selectedEmail.quoteOutcome ? (
+                        <div className={`inline-flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg ${selectedEmail.quoteOutcome === 'won' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          <span>{selectedEmail.quoteOutcome === 'won' ? 'Quote Won' : 'Quote Lost'}</span>
+                          <span className="text-xs font-normal opacity-70">— recorded in CRM</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Quote Outcome</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => markInboxQuoteOutcome(selectedEmail.id, selectedEmail.processThreadId, 'won')}
+                              className="px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                            >
+                              Won
+                            </button>
+                            <button
+                              onClick={() => markInboxQuoteOutcome(selectedEmail.id, selectedEmail.processThreadId, 'lost')}
+                              className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+                            >
+                              Lost
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Customer follow-up input */}
+                      {!selectedEmail.quoteOutcome && (
+                        <div>
+                          <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Customer Follow-up Reply</p>
+                          <div className="space-y-2">
+                            <Textarea
+                              rows={3}
+                              value={inboxFollowUp[selectedEmail.id] ?? ''}
+                              onChange={e => setInboxFollowUp(prev => ({ ...prev, [selectedEmail.id]: e.target.value }))}
+                              placeholder="Type the customer's follow-up (e.g. 'Can you reduce by 10%?' or 'Add 30 days storage')…"
+                              disabled={inboxFollowUpLoading[selectedEmail.id]}
+                            />
+                            <div className="flex items-center gap-3">
+                              <Btn
+                                onClick={() => sendInboxAiReply(selectedEmail.id, inboxFollowUp[selectedEmail.id] ?? '')}
+                                disabled={inboxFollowUpLoading[selectedEmail.id] || !(inboxFollowUp[selectedEmail.id] ?? '').trim()}
+                              >
+                                {inboxFollowUpLoading[selectedEmail.id] ? 'Processing…' : 'Send & AI Reply'}
+                              </Btn>
+                              {inboxFollowUpError[selectedEmail.id] && (
+                                <span className="text-xs text-red-600">{inboxFollowUpError[selectedEmail.id]}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // No quote thread yet
+                    <div>
+                      <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-3">Reply Actions</p>
+                      <div className="flex items-center gap-3">
+                        <Btn
+                          onClick={() => sendToAiQuote(selectedEmail.body, selectedEmail.id)}
+                          disabled={inboxLoading}
+                        >
+                          {inboxLoading ? 'Processing…' : 'Answer with AI Quote'}
+                        </Btn>
+                        {inboxError && <span className="text-xs text-red-600">{inboxError}</span>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1646,28 +1817,16 @@ export default function QuoteTool() {
       <div className="space-y-4">
         {aiQueue.map(item => {
           const draft = queueDrafts[item.id] ?? item.draft
-          const isLoading = replyLoading[item.id] ?? false
-          const replyInput = replyInputs[item.id] ?? ''
           return (
             <Card key={item.id}>
-              {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-sm font-semibold text-[var(--color-text-1)]">{item.subject || '(No subject)'}</p>
                   <p className="text-xs text-[var(--color-text-3)] font-mono mt-0.5">{item.from}</p>
                 </div>
-                {item.outcome ? (
-                  <span className={`text-xs px-2 py-1 rounded font-medium ${item.outcome === 'won' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {item.outcome === 'won' ? 'Won' : 'Lost'}
-                  </span>
-                ) : item.sent ? (
-                  <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">Sent — Awaiting Outcome</span>
-                ) : (
-                  <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 font-medium">Pending Review</span>
-                )}
+                <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 font-medium">Pending Review</span>
               </div>
 
-              {/* Original message collapsible */}
               <details className="mb-4">
                 <summary className="text-xs font-medium text-[var(--color-text-3)] cursor-pointer hover:text-[var(--color-text-2)] uppercase tracking-wider">
                   Original Message
@@ -1677,144 +1836,41 @@ export default function QuoteTool() {
                 </div>
               </details>
 
-              {/* Conversation history */}
-              {item.conversation.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs font-medium text-[var(--color-text-3)] uppercase tracking-wider mb-2">Conversation</p>
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {item.conversation.map((msg, i) => (
-                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[88%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap ${
-                          msg.role === 'user'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-[var(--color-bg-2)] text-[var(--color-text-1)] border border-[var(--color-border)]'
-                        }`}>
-                          {msg.text}
-                        </div>
-                      </div>
-                    ))}
-                    {isLoading && (
-                      <div className="flex justify-start">
-                        <div className="bg-[var(--color-bg-2)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-3)] italic">
-                          Revising quote…
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <div className="mb-3">
+                <Label>AI Draft — Edit before sending</Label>
+                <Textarea
+                  rows={12}
+                  value={draft}
+                  onChange={e => setQueueDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                  className="font-mono text-xs"
+                />
+              </div>
 
-              {/* Draft editor — only when not yet sent */}
-              {!item.sent && (
-                <div className="mb-3">
-                  <Label>AI Draft — Edit before sending</Label>
-                  <Textarea
-                    rows={10}
-                    value={draft}
-                    onChange={e => setQueueDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                    className="font-mono text-xs"
-                  />
-                </div>
-              )}
-
-              {/* Follow-up / revision input — only when not yet sent */}
-              {!item.sent && (
-                <div className="mb-4">
-                  <Label>Ask a follow-up or request a revision</Label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      className="flex-1 text-sm border border-[var(--color-border)] rounded-lg px-3 py-2 bg-[var(--color-bg-1)] text-[var(--color-text-1)] placeholder-[var(--color-text-3)] focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      placeholder="e.g. Add 30 days storage, reduce price by 5%, change container to 20'…"
-                      value={replyInput}
-                      onChange={e => setReplyInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          followUpRevise(item.id, replyInput)
-                        }
-                      }}
-                      disabled={isLoading}
-                    />
-                    <Btn
-                      onClick={() => followUpRevise(item.id, replyInput)}
-                      disabled={isLoading || !replyInput.trim()}
-                    >
-                      {isLoading ? 'Revising…' : 'Revise'}
-                    </Btn>
-                  </div>
-                </div>
-              )}
-
-              {/* Send / copy actions — only when not yet sent */}
-              {!item.sent && (
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Btn
-                    onClick={() => confirmAndSend(item, draft)}
-                    disabled={sendingReply === item.id || isLoading}
-                  >
-                    {sendingReply === item.id
-                      ? 'Sending…'
-                      : (item.emailThreadId || (item.from && item.from !== 'anonymous@example.com'))
-                      ? 'Confirm & Send Email'
-                      : 'Confirm & Send to Inbox'}
-                  </Btn>
-                  {(item.emailThreadId || (item.from && item.from !== 'anonymous@example.com')) && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                      Will send via Resend to {item.from}
-                    </span>
-                  )}
-                  <CopyBtn getText={() => simpleMarkdownToHtml(draft)} label="Copy HTML" />
-                  <CopyBtn getText={() => draft} label="Copy Text" />
-                  {!item.emailId && (
-                    <span className="text-xs text-[var(--color-text-3)]">(No source email — copy and send manually)</span>
-                  )}
-                </div>
-              )}
-
-              {/* Won / Lost outcome buttons — shown after sending, before outcome set */}
-              {item.sent && !item.outcome && (
-                <div className="border-t border-[var(--color-border)] pt-4 mt-2">
-                  <p className="text-xs text-[var(--color-text-3)] mb-3">
-                    Quote sent. Mark the outcome once the customer responds:
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => markQuoteOutcome(item, 'won')}
-                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
-                    >
-                      Won
-                    </button>
-                    <button
-                      onClick={() => markQuoteOutcome(item, 'lost')}
-                      className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
-                    >
-                      Lost
-                    </button>
-                    <button
-                      onClick={() => setAiQueue(prev => prev.map(q => q.id === item.id ? { ...q, sent: false } : q))}
-                      className="text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-1)] underline"
-                    >
-                      Revise quote
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Outcome confirmation banner */}
-              {item.outcome && (
-                <div className={`border-t pt-4 mt-2 ${item.outcome === 'won' ? 'border-green-200' : 'border-red-200'}`}>
-                  <p className={`text-sm font-medium ${item.outcome === 'won' ? 'text-green-700' : 'text-red-600'}`}>
-                    {item.outcome === 'won'
-                      ? 'Quote won! Outcome recorded in CRM.'
-                      : 'Quote lost. Outcome recorded in CRM.'}
-                  </p>
-                </div>
-              )}
-
-              {replyError[item.id] && (
-                <p className="text-xs text-red-600 mt-2">Error: {replyError[item.id]}</p>
-              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Btn
+                  onClick={() => confirmAndSend(item, draft)}
+                  disabled={sendingReply === item.id}
+                >
+                  {sendingReply === item.id
+                    ? 'Sending…'
+                    : (item.emailThreadId || (item.from && item.from !== 'anonymous@example.com'))
+                    ? 'Confirm & Send Email'
+                    : 'Confirm & Send to Inbox'}
+                </Btn>
+                {(item.emailThreadId || (item.from && item.from !== 'anonymous@example.com')) && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                    Will send via Resend to {item.from}
+                  </span>
+                )}
+                <CopyBtn getText={() => simpleMarkdownToHtml(draft)} label="Copy HTML" />
+                <CopyBtn getText={() => draft} label="Copy Text" />
+                {!item.emailId && (
+                  <span className="text-xs text-[var(--color-text-3)]">(No source email — copy and send manually)</span>
+                )}
+                {replyError[item.id] && (
+                  <span className="text-xs text-red-600">Error: {replyError[item.id]}</span>
+                )}
+              </div>
             </Card>
           )
         })}
