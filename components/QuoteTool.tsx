@@ -1174,6 +1174,52 @@ export default function QuoteTool() {
     }))
 
     try {
+      // ── Short-circuit: acceptance / rejection → send closing message ───────
+      const outcome = detectQuoteOutcome(userText)
+      if (outcome) {
+        const closingMsg = outcome === 'won'
+          ? `Thank you for confirming! We're pleased to move forward with your shipment. Our team at FL Distribution will be in touch shortly with the next steps.\n\nBest Regards,\n\nJacob Hernandez\nOperations Lead\nFL Distribution\n(424) 555-0187`
+          : `Thank you for letting us know. We understand and appreciate you considering FL Distribution. Should your needs change, please don't hesitate to reach out — we're always happy to help.\n\nBest Regards,\n\nJacob Hernandez\nOperations Lead\nFL Distribution\n(424) 555-0187`
+
+        try {
+          await fetch('/api/chat/quote/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: currentEmail.processThreadId, status: outcome }),
+          })
+        } catch { /* best-effort */ }
+
+        if (currentEmail.emailThreadId) {
+          try {
+            await fetch('/api/inbox/reply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: currentEmail.from,
+                subject: currentEmail.subject,
+                text: closingMsg,
+                emailThreadId: currentEmail.emailThreadId,
+                processThreadId: currentEmail.processThreadId,
+              }),
+            })
+          } catch { /* non-fatal */ }
+        }
+
+        const aiNow = new Date().toISOString()
+        setEmails(prev => prev.map(e => e.id !== emailId ? e : {
+          ...e,
+          status: 'responded' as const,
+          quoteOutcome: outcome,
+          responses: [
+            ...e.responses.filter(r => r.id !== userMsgId),
+            { id: userMsgId, body: userText, sentAt: now, role: 'user' as const, format: 'text' as const },
+            { id: uid(), body: closingMsg, sentAt: aiNow, role: 'ai' as const, format: 'text' as const },
+          ],
+        }))
+        return
+      }
+
+      // ── Normal follow-up: run through AI processing pipeline ──────────────
       const processRes = await fetch('/api/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1224,19 +1270,6 @@ export default function QuoteTool() {
           { id: uid(), body: aiDraft, sentAt: aiNow, role: 'ai' as const, format: 'text' as const },
         ],
       }))
-
-      // Auto-detect acceptance or rejection from the customer's message
-      const outcome = detectQuoteOutcome(userText)
-      if (outcome && resolvedThreadId) {
-        try {
-          await fetch('/api/chat/quote/status', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ threadId: resolvedThreadId, status: outcome }),
-          })
-        } catch { /* best-effort */ }
-        setEmails(prev => prev.map(e => e.id !== emailId ? e : { ...e, quoteOutcome: outcome }))
-      }
     } catch (err) {
       // Remove optimistic message on error
       setEmails(prev => prev.map(e => e.id !== emailId ? e : {

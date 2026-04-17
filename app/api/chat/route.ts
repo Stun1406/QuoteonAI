@@ -350,14 +350,6 @@ function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, sub
         : `Container Handling (${containerSize}') — Base Fee`
       items.push({ category: 'Container', description: containerDesc, amount: containerTotal })
 
-      // ── Row 2: per-pallet unloading — only when pallet count was explicitly provided ──
-      if (args.pallet_count != null) {
-        items.push({
-          category: 'Transloading',
-          description: `${subTypeLabel} — ${args.pallet_count} pallets @ $${baseRate}/pallet`,
-          amount: subtotal,
-        })
-      }
     } else {
       // Loose cargo: flat per-container rate
       const qtyLabel = args.container_count != null
@@ -370,7 +362,14 @@ function buildLineItems(args: QuoteArgs, baseRate: number, subtotal: number, sub
     for (const svc of (args.add_on_services ?? [])) {
       const s = svc.toLowerCase()
       if (/shrink.?wrap|shrink/.test(s)) {
-        items.push({ category: 'Accessorial', description: 'Shrink Wrap', amount: 150 })
+        const swPallets = args.pallet_count ?? 0
+        const swAmount = (swPallets > 0 && (stk === 'regular' || stk === 'oversize'))
+          ? swPallets * baseRate
+          : 150
+        const swDesc = (swPallets > 0 && (stk === 'regular' || stk === 'oversize'))
+          ? `Shrink Wrap — ${swPallets} pallets @ $${baseRate}/pallet`
+          : 'Shrink Wrap'
+        items.push({ category: 'Accessorial', description: swDesc, amount: swAmount })
       } else if (/bol|bill.?of.?lading/.test(s)) {
         items.push({ category: 'Documentation', description: 'BOL Preparation', amount: 35 })
       } else if (/seal/.test(s)) {
