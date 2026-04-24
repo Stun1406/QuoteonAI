@@ -190,8 +190,10 @@ export async function GET() {
 
     return NextResponse.json({ emails })
   } catch (err) {
-    // DB not available — fall back to in-memory store
-    console.error('[/api/inbox] DB error, falling back to in-memory store:', err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[/api/inbox] DB error:', message)
+
+    const missingTable = /relation .* does not exist|no such table/i.test(message)
     const stored = getAllEmails()
     return NextResponse.json({
       emails: stored.map(e => ({
@@ -207,6 +209,10 @@ export async function GET() {
         responses: [],
         source: 'real',
       })),
+      _dbError: message,
+      _hint: missingTable
+        ? 'Database tables are missing — run: pnpm db:migrate'
+        : 'Database connection failed — check DATABASE_URL in Vercel environment variables',
     })
   }
 }

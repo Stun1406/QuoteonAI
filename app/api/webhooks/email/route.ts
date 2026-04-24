@@ -7,6 +7,62 @@ import { storeEmail } from '@/lib/email-store'
 import { resolveThreadForInbound, insertInboundEmailMessage, findEmailMessageByCanonicalId } from '@/lib/db/tables/email-thread'
 import { sql } from '@/lib/db/client'
 
+// ── Diagnostic GET — verifies the webhook is reachable and shows config status ─
+export async function GET() {
+  const apiKeyConfigured  = !!(process.env.EMAIL_WORKER_API_KEY)
+  const secretConfigured  = !!(process.env.WEBHOOK_SECRET)
+  const authConfigured    = apiKeyConfigured || secretConfigured
+
+  // Quick DB health check
+  let dbOk = false
+  let tableExists = false
+  let recentFailureCount = 0
+  let emailCount = 0
+  try {
+    await sql`SELECT 1`
+    dbOk = true
+    const tbls = await sql`
+      SELECT COUNT(*) AS n FROM information_schema.tables
+      WHERE table_name IN ('email_threads','email_messages')
+    ` as Array<{ n: string }>
+    tableExists = Number(tbls[0]?.n ?? 0) === 2
+
+    if (tableExists) {
+      const cnt = await sql`SELECT COUNT(*) AS n FROM email_messages WHERE direction = 'inbound'` as Array<{ n: string }>
+      emailCount = Number(cnt[0]?.n ?? 0)
+    }
+
+    const failTbl = await sql`
+      SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_name = 'email_failures'
+    ` as Array<{ n: string }>
+    if (Number(failTbl[0]?.n ?? 0) > 0) {
+      const fc = await sql`SELECT COUNT(*) AS n FROM email_failures WHERE created_at > NOW() - INTERVAL '24 hours'` as Array<{ n: string }>
+      recentFailureCount = Number(fc[0]?.n ?? 0)
+    }
+  } catch { /* DB unreachable */ }
+
+  return NextResponse.json({
+    status: 'ok',
+    auth: {
+      configured: authConfigured,
+      emailWorkerApiKey: apiKeyConfigured ? 'set' : 'NOT SET',
+      webhookSecret: secretConfigured ? 'set' : 'NOT SET',
+      note: authConfigured
+        ? 'Cloudflare worker x-api-key must match EMAIL_WORKER_API_KEY or WEBHOOK_SECRET in Vercel env vars'
+        : 'WARNING: No auth configured — webhook accepts any request',
+    },
+    database: {
+      connected: dbOk,
+      tablesExist: tableExists,
+      inboundEmailCount: emailCount,
+      recentFailures24h: recentFailureCount,
+    },
+    instructions: tableExists
+      ? null
+      : 'Run database migrations: pnpm db:migrate — email_threads / email_messages tables are missing',
+  })
+}
+
 // ── Quote outcome detection ───────────────────────────────────────────────────
 function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
   const t = text.toLowerCase()

@@ -697,6 +697,7 @@ export default function QuoteTool() {
   const [inboxFollowUp, setInboxFollowUp] = useState<Record<string, string>>({})
   const [inboxFollowUpLoading, setInboxFollowUpLoading] = useState<Record<string, boolean>>({})
   const [inboxFollowUpError, setInboxFollowUpError] = useState<Record<string, string>>({})
+  const [inboxDbError, setInboxDbError] = useState<string | null>(null)
 
   // ── Drayage ────────────────────────────────────────────────────────────────
   const [dCity, setDCity] = useState('')
@@ -873,7 +874,13 @@ export default function QuoteTool() {
     try {
       const res = await fetch('/api/inbox')
       if (!res.ok) return
-      const { emails: realEmails } = await res.json() as { emails: MockEmail[] }
+      const data = await res.json() as { emails: MockEmail[]; _dbError?: string; _hint?: string }
+      if (data._dbError) {
+        setInboxDbError(data._hint ?? data._dbError)
+      } else {
+        setInboxDbError(null)
+      }
+      const realEmails = data.emails ?? []
       setEmails(prev => {
         const mockEmails = prev.filter(e => !e.source || e.source === 'mock')
         const prevRealMap = new Map(prev.filter(e => e.source === 'real').map(e => [e.id, e]))
@@ -1581,6 +1588,18 @@ export default function QuoteTool() {
   function renderInbox() {
     return (
       <div className="flex flex-col gap-4 h-full">
+        {/* DB error banner */}
+        {inboxDbError && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="mt-0.5 shrink-0">⚠️</span>
+            <div>
+              <strong>Inbox database error:</strong> {inboxDbError}
+              <span className="ml-2 text-amber-600 text-xs">
+                Visit <code>/api/webhooks/email</code> for diagnostics.
+              </span>
+            </div>
+          </div>
+        )}
         {/* Compose form */}
         <Card title="Compose Message">
           <div className="grid grid-cols-2 gap-3 mb-3">
