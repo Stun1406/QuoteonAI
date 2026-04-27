@@ -175,14 +175,20 @@ export async function POST(req: NextRequest) {
     const parsed = await new PostalMime().parse(rawEmail)
 
     const from = parsed.from?.address ?? fromHeader ?? 'unknown@unknown.com'
-    const to = parsed.to?.[0]?.address ?? toHeader ?? ''
+    // For display/storage, use the parsed To header so the UI shows the real recipient.
+    // For THREAD MATCHING, always use the envelope recipient from the Cloudflare worker
+    // (toHeader = message.to) which is always the routing destination (quote-agent@quotify.cc).
+    // Using parsed.to?.[0] here breaks for CC'd / forwarded emails where the first To: address
+    // is someone else entirely, causing threads to be matched by the wrong pair.
+    const toDisplay = parsed.to?.[0]?.address ?? toHeader ?? ''
+    const toEnvelope = toHeader ?? toDisplay   // prefer envelope recipient for thread key
     const subject = parsed.subject ?? subjectHeader ?? '(no subject)'
     const bodyText = parsed.text ?? ''
     const bodyHtml = parsed.html ?? undefined
     const messageId = parsed.messageId ?? messageIdHeader ?? null
     const timestamp = timestampStr ?? new Date().toISOString()
 
-    console.log(`[webhook/email] Received from=${from} subject="${subject}" messageId=${messageId}`)
+    console.log(`[webhook/email] Received from=${from} to=${toEnvelope} subject="${subject}" messageId=${messageId}`)
 
     // Deduplication
     const canonicalId = generateCanonicalId(messageId, from, subject, timestamp)
@@ -195,8 +201,8 @@ export async function POST(req: NextRequest) {
     // Trust level
     const trustLevel = computeTrustLevel(spf, dkim)
 
-    // Resolve or create thread
-    const emailThread = await resolveThreadForInbound({ from, to, subject })
+    // Resolve or create thread — use envelope recipient so every sender gets their own thread
+    const emailThread = await resolveThreadForInbound({ from, to: toEnvelope, subject })
 
     // Insert into DB
     const emailMsg = await insertInboundEmailMessage({
@@ -206,7 +212,7 @@ export async function POST(req: NextRequest) {
       inReplyTo: inReplyTo ?? parsed.inReplyTo ?? undefined,
       referencesHeader: references ?? undefined,
       fromEmail: from,
-      toEmail: to,
+      toEmail: toDisplay,
       subject,
       bodyText,
       bodyHtml,
@@ -221,7 +227,7 @@ export async function POST(req: NextRequest) {
       id: emailMsg.id,
       canonicalId,
       from,
-      to,
+      to: toDisplay,
       subject,
       bodyText,
       bodyHtml,

@@ -6,11 +6,18 @@ export function normalizeSubject(subject: string): string {
 }
 
 export async function findEmailThread(subjectNorm: string, participantFrom: string, participantTo: string): Promise<EmailThreadRow | null> {
+  // Match only threads between the EXACT same two parties (both directions to handle replies).
+  // The previous OR-of-four-conditions query matched any thread where participant_to =
+  // 'quote-agent@quotify.cc', which is true for every thread — causing all emails with the
+  // same subject from different senders to be incorrectly merged into one thread.
   const rows = await sql`
     SELECT * FROM email_threads
     WHERE subject_norm = ${subjectNorm}
-      AND (participant_from = ${participantFrom} OR participant_to = ${participantFrom}
-           OR participant_from = ${participantTo} OR participant_to = ${participantTo})
+      AND (
+        (participant_from = ${participantFrom} AND participant_to = ${participantTo})
+        OR
+        (participant_from = ${participantTo} AND participant_to = ${participantFrom})
+      )
     ORDER BY last_message_at DESC
     LIMIT 1
   `
