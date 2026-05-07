@@ -6,6 +6,7 @@ import { logEmailFailure } from '@/lib/email-failure-log'
 import { storeEmail } from '@/lib/email-store'
 import { resolveThreadForInbound, insertInboundEmailMessage, findEmailMessageByCanonicalId } from '@/lib/db/tables/email-thread'
 import { sql } from '@/lib/db/client'
+import { openai, MODEL } from '@/lib/llm/client'
 
 // ── Diagnostic GET — verifies the webhook is reachable and shows config status ─
 export async function GET() {
@@ -63,12 +64,39 @@ export async function GET() {
   })
 }
 
-// ── Quote outcome detection ───────────────────────────────────────────────────
-function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
-  const t = text.toLowerCase()
-  if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed|that works|this works|all good|that'?s great|great thank|thank you for|works for us|we'?re good|good to go|let'?s proceed|please go ahead|that'?s perfect|this is perfect|we agree|agreed|all set|we'?ll take|we will take|ready to proceed|ready to move|confirming)\b/.test(t)) return 'won'
-  if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high|not for us|won'?t be|cannot proceed|not proceeding|pass on this|going another route|found another|other option|different provider)\b/.test(t)) return 'lost'
-  return null
+// ── Quote outcome classification via LLM ─────────────────────────────────────
+async function classifyQuoteOutcome(bodyText: string): Promise<'won' | 'lost' | null> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You analyze email replies from customers who have received a freight shipping quote.
+
+Determine if the customer is making a FINAL DECISION about the quote.
+
+Return ONLY valid JSON — no markdown, no explanation:
+- {"outcome": "won"}  — customer is clearly and unambiguously ACCEPTING the quote and wants to proceed or book
+- {"outcome": "lost"} — customer is clearly and unambiguously DECLINING, rejecting, or going with another provider
+- {"outcome": null}   — customer is asking a question, requesting a change, negotiating, or intent is unclear
+
+Be conservative. When in doubt, return {"outcome": null}.`,
+        },
+        {
+          role: 'user',
+          content: bodyText.slice(0, 1500),
+        },
+      ],
+      max_tokens: 20,
+      temperature: 0,
+    })
+    const raw = completion.choices[0]?.message?.content?.trim() ?? ''
+    const parsed = JSON.parse(raw) as { outcome: 'won' | 'lost' | null }
+    return parsed.outcome ?? null
+  } catch {
+    return null
+  }
 }
 
 // Support both multipart/form-data (Cloudflare worker) and application/json
@@ -242,13 +270,24 @@ export async function POST(req: NextRequest) {
       const ptRows = await sql`SELECT process_thread_id FROM email_threads WHERE id = ${emailThread.id}` as Array<{ process_thread_id?: string }>
       const processThreadId = ptRows[0]?.process_thread_id
       if (processThreadId && bodyText) {
-        const outboundRows = await sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'outbound'` as Array<{ count: number }>
-        if ((outboundRows[0]?.count ?? 0) > 0) {
-          const outcome = detectQuoteOutcome(bodyText)
+        // Run both counts in parallel
+        const [outboundRows, inboundRows] = await Promise.all([
+          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'outbound'` as Promise<Array<{ count: number }>>,
+          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'inbound'`  as Promise<Array<{ count: number }>>,
+        ])
+        const outboundCount = outboundRows[0]?.count ?? 0
+        const inboundCount  = inboundRows[0]?.count ?? 0
+
+        // Only detect outcome when:
+        //   1. A quote has already been sent (outbound > 0)
+        //   2. This is the customer's reply, not their initial request (inbound >= 2,
+        //      because the current message was already inserted before this check)
+        if (outboundCount > 0 && inboundCount >= 2) {
+          const outcome = await classifyQuoteOutcome(bodyText)
           if (outcome) {
             await sql`UPDATE message_threads SET status = ${outcome}, closed_at = NOW(), updated_at = NOW() WHERE thread_id = ${processThreadId}`
             await sql`UPDATE email_threads SET status = ${outcome}, updated_at = NOW() WHERE id = ${emailThread.id}`
-            console.log(`[webhook/email] Auto-detected quote outcome: ${outcome} for thread ${processThreadId}`)
+            console.log(`[webhook/email] Auto-detected quote outcome: ${outcome} for thread ${processThreadId} (outbound=${outboundCount} inbound=${inboundCount})`)
           }
         }
       }

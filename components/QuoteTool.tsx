@@ -1154,14 +1154,6 @@ export default function QuoteTool() {
     }, 2500)
   }
 
-  // ── Quote outcome detection from natural language ─────────────────────────
-  function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
-    const t = text.toLowerCase()
-    if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed|that works|this works|all good|that'?s great|great thank|thank you for|works for us|we'?re good|good to go|let'?s proceed|please go ahead|please proceed|that'?s perfect|this is perfect|we agree|agreed|approved this|confirming|all set|we'?ll take|we will take|ready to proceed|ready to move)\b/.test(t)) return 'won'
-    if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high|not for us|won'?t be|cannot proceed|not proceeding|pass on this|going another route|found another|other option|different provider)\b/.test(t)) return 'lost'
-    return null
-  }
-
   // ── Inbox AI follow-up reply ───────────────────────────────────────────────
   async function sendInboxAiReply(emailId: string, userText: string) {
     if (!userText.trim()) return
@@ -1182,8 +1174,13 @@ export default function QuoteTool() {
     }))
 
     try {
-      // ── Short-circuit: acceptance / rejection → send closing message ───────
-      const outcome = detectQuoteOutcome(userText)
+      // ── LLM classification: acceptance / rejection → send closing message ──
+      const classifyRes = await fetch('/api/inbox/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText }),
+      })
+      const { outcome } = classifyRes.ok ? await classifyRes.json() as { outcome: 'won' | 'lost' | null } : { outcome: null }
       if (outcome) {
         const closingMsg = outcome === 'won'
           ? `Thank you for confirming! We're pleased to move forward with your shipment. Our team at FL Distribution will be in touch shortly with the next steps.\n\nBest Regards,\n\nJacob Hernandez\nOperations Lead\nFL Distribution\n(424) 555-0187`
