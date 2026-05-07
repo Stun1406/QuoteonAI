@@ -230,12 +230,7 @@ function Table({ headers, children }: { headers: string[]; children: React.React
 
 // ── Sub-panels ────────────────────────────────────────────────────────────────
 
-function Dashboard({ stats, recent, hardcodedIds, onDismissHardcoded }: {
-  stats: DashboardStats | null
-  recent: RecentQuote[]
-  hardcodedIds: Set<string>
-  onDismissHardcoded: (id: string) => void
-}) {
+function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: RecentQuote[] }) {
   if (!stats) {
     return (
       <div className="space-y-6">
@@ -376,10 +371,7 @@ function Dashboard({ stats, recent, hardcodedIds, onDismissHardcoded }: {
           <Table headers={['Customer', 'Company', 'Type', 'Value', 'Status', 'Date']}>
             {recent.map(q => (
               <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                <TD>
-                  <div>{q.contact_name ?? '—'}</div>
-                  {hardcodedIds.has(q.id) && <HardcodedTag id={q.id} onDismiss={onDismissHardcoded} />}
-                </TD>
+                <TD>{q.contact_name ?? '—'}</TD>
                 <TD className="font-medium">{q.company_name ?? '—'}</TD>
                 <TD>{serviceLabel(q.processor_type)}</TD>
                 <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
@@ -451,37 +443,7 @@ const SEED_RECENT_QUOTES: RecentQuote[] = [
   { id: 'seed-rq-5', processor_type: 'last-mile',  status: 'quoted', quote_value: 560,  created_at: daysAgo(10), contact_name: 'James Kim',       company_name: 'SoCal Freight Partners' },
 ]
 
-const ALL_HARDCODED_IDS = new Set([
-  ...SEED_ACCOUNTS.map(a => a.id),
-  ...SEED_QUOTES.map(q => q.id),
-  ...SEED_CARRIERS.map(c => c.id),
-  ...SEED_SHIPMENTS.map(s => s.id),
-  ...SEED_RECENT_QUOTES.map(r => r.id),
-])
-
-function HardcodedTag({ id, onDismiss }: { id: string; onDismiss: (id: string) => void }) {
-  return (
-    <div className="flex items-center gap-1 mt-1">
-      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold uppercase tracking-wide border border-amber-200">
-        Hardcoded
-      </span>
-      <button
-        onClick={e => { e.stopPropagation(); onDismiss(id) }}
-        className="text-[10px] text-amber-500 hover:text-red-500 transition-colors font-medium leading-none"
-        title="Remove this placeholder entry"
-      >
-        ✕
-      </button>
-    </div>
-  )
-}
-
-function Customers({ accounts, loading, hardcodedIds, onDismissHardcoded }: {
-  accounts: Account[]
-  loading: boolean
-  hardcodedIds: Set<string>
-  onDismissHardcoded: (id: string) => void
-}) {
+function Customers({ accounts, loading }: { accounts: Account[]; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
 
@@ -523,10 +485,7 @@ function Customers({ accounts, loading, hardcodedIds, onDismissHardcoded }: {
         <Table headers={['Company', 'Industry', 'Category', 'Region', 'Credit Terms', 'Contacts', 'Quotes', 'Total Value', 'Since']}>
           {filtered.map(a => (
             <tr key={a.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-              <TD>
-                <div className="font-medium">{a.business_name}</div>
-                {hardcodedIds.has(a.id) && <HardcodedTag id={a.id} onDismiss={onDismissHardcoded} />}
-              </TD>
+              <TD><div className="font-medium">{a.business_name}</div></TD>
               <TD>{a.industry_type ?? '—'}</TD>
               <TD>
                 <Badge
@@ -548,12 +507,7 @@ function Customers({ accounts, loading, hardcodedIds, onDismissHardcoded }: {
   )
 }
 
-function Quotes({ quotes, loading, hardcodedIds, onDismissHardcoded }: {
-  quotes: Quote[]
-  loading: boolean
-  hardcodedIds: Set<string>
-  onDismissHardcoded: (id: string) => void
-}) {
+function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -602,7 +556,6 @@ function Quotes({ quotes, loading, hardcodedIds, onDismissHardcoded }: {
               <TD>
                 <div className="font-medium">{q.contact_name ?? '—'}</div>
                 {q.contact_email && <div className="text-xs text-[var(--color-text-3)]">{q.contact_email}</div>}
-                {hardcodedIds.has(q.id) && <HardcodedTag id={q.id} onDismiss={onDismissHardcoded} />}
               </TD>
               <TD>{q.company_name ?? '—'}</TD>
               <TD>{q.industry_type ?? '—'}</TD>
@@ -622,12 +575,7 @@ function Quotes({ quotes, loading, hardcodedIds, onDismissHardcoded }: {
   )
 }
 
-function Carriers({ carriers, loading, hardcodedIds, onDismissHardcoded }: {
-  carriers: Carrier[]
-  loading: boolean
-  hardcodedIds: Set<string>
-  onDismissHardcoded: (id: string) => void
-}) {
+function Carriers({ carriers, loading }: { carriers: Carrier[]; loading: boolean }) {
   const [search, setSearch] = useState('')
 
   const filtered = carriers.filter(c => {
@@ -661,10 +609,7 @@ function Carriers({ carriers, loading, hardcodedIds, onDismissHardcoded }: {
         <Table headers={['Carrier', 'MC #', 'DOT #', 'Contact', 'Insurance', 'Exp. Date', 'Perf. Score', 'Status']}>
           {filtered.map(c => (
             <tr key={c.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-              <TD>
-                <div className="font-medium">{c.company_name}</div>
-                {hardcodedIds.has(c.id) && <HardcodedTag id={c.id} onDismiss={onDismissHardcoded} />}
-              </TD>
+              <TD><div className="font-medium">{c.company_name}</div></TD>
               <TD>{c.mc_number ?? '—'}</TD>
               <TD>{c.dot_number ?? '—'}</TD>
               <TD>
@@ -687,12 +632,7 @@ function Carriers({ carriers, loading, hardcodedIds, onDismissHardcoded }: {
   )
 }
 
-function Shipments({ shipments, loading, hardcodedIds, onDismissHardcoded }: {
-  shipments: Shipment[]
-  loading: boolean
-  hardcodedIds: Set<string>
-  onDismissHardcoded: (id: string) => void
-}) {
+function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const shipmentNumbers = new Map(
@@ -737,10 +677,7 @@ function Shipments({ shipments, loading, hardcodedIds, onDismissHardcoded }: {
         <Table headers={['Shipment ID', 'Customer', 'Carrier', 'Route', 'Equipment', 'Service', 'Pickup', 'Delivery', 'Value', 'Status']}>
           {filtered.map(s => (
             <tr key={s.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-              <TD>
-                <span className="font-mono text-xs">{s.displayId}</span>
-                {hardcodedIds.has(s.id) && <HardcodedTag id={s.id} onDismiss={onDismissHardcoded} />}
-              </TD>
+              <TD><span className="font-mono text-xs">{s.displayId}</span></TD>
               <TD>{s.customer_company ?? s.customer_name ?? '—'}</TD>
               <TD>{s.carrier_name ?? '—'}</TD>
               <TD>
@@ -1648,30 +1585,11 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
   })
   const loaded = useRef<Set<CrmSubTab>>(new Set())
 
-  const [dismissedHardcoded, setDismissedHardcoded] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('crm-dismissed-hardcoded')
-      return new Set(stored ? JSON.parse(stored) as string[] : [])
-    } catch { return new Set<string>() }
-  })
-
-  function dismissHardcoded(id: string) {
-    setDismissedHardcoded(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      try { localStorage.setItem('crm-dismissed-hardcoded', JSON.stringify([...next])) } catch {}
-      return next
-    })
-  }
-
-  const mergedAccounts = [...data.accounts, ...SEED_ACCOUNTS.filter(s => !dismissedHardcoded.has(s.id))]
-  const mergedQuotes = [...data.quotes, ...SEED_QUOTES.filter(s => !dismissedHardcoded.has(s.id))]
-  const mergedCarriers = [...data.carriers, ...SEED_CARRIERS.filter(s => !dismissedHardcoded.has(s.id))]
-  const mergedShipments = [...data.shipments, ...SEED_SHIPMENTS.filter(s => !dismissedHardcoded.has(s.id))]
-  const mergedRecentQuotes = [
-    ...(data.dashboard?.recentQuotes ?? []),
-    ...SEED_RECENT_QUOTES.filter(s => !dismissedHardcoded.has(s.id)),
-  ]
+  const mergedAccounts = [...data.accounts, ...SEED_ACCOUNTS]
+  const mergedQuotes = [...data.quotes, ...SEED_QUOTES]
+  const mergedCarriers = [...data.carriers, ...SEED_CARRIERS]
+  const mergedShipments = [...data.shipments, ...SEED_SHIPMENTS]
+  const mergedRecentQuotes = [...(data.dashboard?.recentQuotes ?? []), ...SEED_RECENT_QUOTES]
 
   async function fetchSection(section: CrmSubTab) {
     if (section === 'analytics' || section === 'pricing' || loaded.current.has(section)) return
@@ -1763,44 +1681,19 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
 
       {/* Content */}
       {subTab === 'dashboard' && (
-        <Dashboard
-          stats={data.dashboard?.stats ?? null}
-          recent={mergedRecentQuotes}
-          hardcodedIds={ALL_HARDCODED_IDS}
-          onDismissHardcoded={dismissHardcoded}
-        />
+        <Dashboard stats={data.dashboard?.stats ?? null} recent={mergedRecentQuotes} />
       )}
       {subTab === 'customers' && (
-        <Customers
-          accounts={mergedAccounts}
-          loading={loading.customers}
-          hardcodedIds={ALL_HARDCODED_IDS}
-          onDismissHardcoded={dismissHardcoded}
-        />
+        <Customers accounts={mergedAccounts} loading={loading.customers} />
       )}
       {subTab === 'quotes' && (
-        <Quotes
-          quotes={mergedQuotes}
-          loading={loading.quotes}
-          hardcodedIds={ALL_HARDCODED_IDS}
-          onDismissHardcoded={dismissHardcoded}
-        />
+        <Quotes quotes={mergedQuotes} loading={loading.quotes} />
       )}
       {subTab === 'carriers' && (
-        <Carriers
-          carriers={mergedCarriers}
-          loading={loading.carriers}
-          hardcodedIds={ALL_HARDCODED_IDS}
-          onDismissHardcoded={dismissHardcoded}
-        />
+        <Carriers carriers={mergedCarriers} loading={loading.carriers} />
       )}
       {subTab === 'shipments' && (
-        <Shipments
-          shipments={mergedShipments}
-          loading={loading.shipments}
-          hardcodedIds={ALL_HARDCODED_IDS}
-          onDismissHardcoded={dismissHardcoded}
-        />
+        <Shipments shipments={mergedShipments} loading={loading.shipments} />
       )}
       {subTab === 'pricing' && (
         <PricingIntelligence />

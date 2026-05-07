@@ -272,9 +272,9 @@ export async function POST(req: NextRequest) {
       if (processThreadId && bodyText) {
         // Run both counts in parallel
         const [outboundRows, inboundRows] = await Promise.all([
-          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'outbound'` as Promise<Array<{ count: number }>>,
-          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'inbound'`  as Promise<Array<{ count: number }>>,
-        ])
+          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'outbound'`,
+          sql`SELECT COUNT(*)::int AS count FROM email_messages WHERE thread_id = ${emailThread.id} AND direction = 'inbound'`,
+        ]) as [Array<{ count: number }>, Array<{ count: number }>]
         const outboundCount = outboundRows[0]?.count ?? 0
         const inboundCount  = inboundRows[0]?.count ?? 0
 
