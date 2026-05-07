@@ -1157,8 +1157,8 @@ export default function QuoteTool() {
   // ── Quote outcome detection from natural language ─────────────────────────
   function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
     const t = text.toLowerCase()
-    if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|great|we'?ll take it|happy to proceed)\b/.test(t)) return 'won'
-    if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high)\b/.test(t)) return 'lost'
+    if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed|that works|this works|all good|that'?s great|great thank|thank you for|works for us|we'?re good|good to go|let'?s proceed|please go ahead|please proceed|that'?s perfect|this is perfect|we agree|agreed|approved this|confirming|all set|we'?ll take|we will take|ready to proceed|ready to move)\b/.test(t)) return 'won'
+    if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high|not for us|won'?t be|cannot proceed|not proceeding|pass on this|going another route|found another|other option|different provider)\b/.test(t)) return 'lost'
     return null
   }
 
@@ -1227,26 +1227,24 @@ export default function QuoteTool() {
         return
       }
 
-      // ── Normal follow-up: run through AI processing pipeline ──────────────
-      const processRes = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: userText, threadId: currentEmail.processThreadId }),
-      })
-      if (!processRes.ok) {
-        const errBody = await processRes.json().catch(() => ({}))
-        throw new Error((errBody as { error?: string }).error ?? `Process API returned ${processRes.status}`)
-      }
-      const processData = await processRes.json()
+      // ── Normal follow-up: contextual AI reply (not a re-quote) ──────────────
+      const conversationHistory = currentEmail.responses.map(r => ({
+        role: r.role === 'ai' ? 'assistant' : 'user' as 'user' | 'assistant',
+        content: r.body,
+      }))
 
-      const convertRes = await fetch('/api/convert', {
+      const followupRes = await fetch('/api/inbox/followup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: processData, originalRequest: userText, threadId: processData.threadUuid }),
+        body: JSON.stringify({
+          customerMessage: userText,
+          originalSubject: currentEmail.subject,
+          conversationHistory,
+        }),
       })
-      if (!convertRes.ok) throw new Error(`Convert API returned ${convertRes.status}`)
-      const convertData = await convertRes.json()
-      const aiDraft = convertData.markdown ?? convertData.plainText ?? ''
+      if (!followupRes.ok) throw new Error(`Follow-up AI returned ${followupRes.status}`)
+      const followupData = await followupRes.json()
+      const aiDraft = followupData.reply ?? ''
 
       // Send via email if we have a thread ID
       if (currentEmail.emailThreadId) {
@@ -1258,20 +1256,17 @@ export default function QuoteTool() {
               to: currentEmail.from,
               subject: currentEmail.subject,
               text: aiDraft,
-              html: simpleMarkdownToHtml(aiDraft),
               emailThreadId: currentEmail.emailThreadId,
-              processThreadId: processData.threadId ?? currentEmail.processThreadId,
+              processThreadId: currentEmail.processThreadId,
             }),
           })
         } catch { /* non-fatal */ }
       }
 
       const aiNow = new Date().toISOString()
-      const resolvedThreadId = processData.threadId ?? currentEmail.processThreadId
       setEmails(prev => prev.map(e => e.id !== emailId ? e : {
         ...e,
         status: 'responded' as const,
-        processThreadId: resolvedThreadId,
         responses: [
           ...e.responses.filter(r => r.id !== userMsgId),
           { id: userMsgId, body: userText, sentAt: now, role: 'user' as const, format: 'text' as const },
@@ -1709,7 +1704,7 @@ export default function QuoteTool() {
                     <div className="flex items-center gap-1.5 min-w-0">
                       {email.sourceTag === 'email' && (
                         <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold uppercase tracking-wide">
-                          Gmail
+                          Email
                         </span>
                       )}
                       {email.sourceTag === 'whatsapp' && (

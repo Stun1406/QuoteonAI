@@ -230,7 +230,12 @@ function Table({ headers, children }: { headers: string[]; children: React.React
 
 // ── Sub-panels ────────────────────────────────────────────────────────────────
 
-function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: RecentQuote[] }) {
+function Dashboard({ stats, recent, hardcodedIds, onDismissHardcoded }: {
+  stats: DashboardStats | null
+  recent: RecentQuote[]
+  hardcodedIds: Set<string>
+  onDismissHardcoded: (id: string) => void
+}) {
   if (!stats) {
     return (
       <div className="space-y-6">
@@ -371,7 +376,10 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
           <Table headers={['Customer', 'Company', 'Type', 'Value', 'Status', 'Date']}>
             {recent.map(q => (
               <tr key={q.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-                <TD>{q.contact_name ?? '—'}</TD>
+                <TD>
+                  <div>{q.contact_name ?? '—'}</div>
+                  {hardcodedIds.has(q.id) && <HardcodedTag id={q.id} onDismiss={onDismissHardcoded} />}
+                </TD>
                 <TD className="font-medium">{q.company_name ?? '—'}</TD>
                 <TD>{serviceLabel(q.processor_type)}</TD>
                 <TD className="font-semibold text-blue-700">{fmt(q.quote_value)}</TD>
@@ -388,7 +396,92 @@ function Dashboard({ stats, recent }: { stats: DashboardStats | null; recent: Re
 
 
 
-function Customers({ accounts, loading }: { accounts: Account[]; loading: boolean }) {
+// ── Seed / placeholder data ───────────────────────────────────────────────────
+
+function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString() }
+
+const SEED_ACCOUNTS: Account[] = [
+  { id: 'seed-acc-1', business_name: 'Pacific Imports LLC', email_domain: 'pacificimports.com', industry_type: 'Import & Distribution', category: 'gold', region: 'Los Angeles', credit_terms: 'Net 30', account_status: 'active', contact_count: 3, quote_count: 8, total_value: 32400, created_at: daysAgo(120) },
+  { id: 'seed-acc-2', business_name: 'Western LogCo', email_domain: 'westernlogco.com', industry_type: 'Third-Party Logistics', category: 'gold', region: 'Long Beach', credit_terms: 'Net 15', account_status: 'active', contact_count: 2, quote_count: 6, total_value: 27800, created_at: daysAgo(95) },
+  { id: 'seed-acc-3', business_name: 'FLD — FL Distribution', email_domain: 'fldistribution.com', industry_type: 'Freight & Logistics', category: 'platinum', region: 'Southern California', credit_terms: 'Net 30', account_status: 'active', contact_count: 4, quote_count: 12, total_value: 48750, created_at: daysAgo(90) },
+  { id: 'seed-acc-4', business_name: 'SoCal Freight Partners', email_domain: 'socalfreight.com', industry_type: 'Freight Brokerage', category: 'silver', region: 'Carson', credit_terms: 'Net 15', account_status: 'active', contact_count: 1, quote_count: 4, total_value: 9850, created_at: daysAgo(60) },
+  { id: 'seed-acc-5', business_name: 'Sunrise Distribution', email_domain: 'sunrisedistrib.com', industry_type: 'Warehousing & Distribution', category: 'silver', region: 'Ontario', credit_terms: 'Net 30', account_status: 'active', contact_count: 2, quote_count: 5, total_value: 14600, created_at: daysAgo(75) },
+  { id: 'seed-acc-6', business_name: 'Harbor Trade Group', email_domain: 'harbortradegroup.com', industry_type: 'Import & Distribution', category: 'standard', region: 'Wilmington', credit_terms: 'Net 30', account_status: 'active', contact_count: 1, quote_count: 2, total_value: 2900, created_at: daysAgo(30) },
+]
+
+const SEED_QUOTES: Quote[] = [
+  { id: 'seed-q-1',  processor_type: 'drayage',    status: 'won',    quote_value: 2100, confidence_score: 0.97, created_at: daysAgo(3),  contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution', industry_type: 'Freight & Logistics' },
+  { id: 'seed-q-2',  processor_type: 'drayage',    status: 'won',    quote_value: 1450, confidence_score: 0.95, created_at: daysAgo(5),  contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',   industry_type: 'Import & Distribution' },
+  { id: 'seed-q-3',  processor_type: 'warehousing',status: 'quoted', quote_value: 3200, confidence_score: 0.91, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',         industry_type: 'Third-Party Logistics' },
+  { id: 'seed-q-4',  processor_type: 'drayage',    status: 'won',    quote_value: 980,  confidence_score: 0.98, created_at: daysAgo(8),  contact_name: 'David Park',      contact_email: 'david@sunrisedistrib.com',  company_name: 'Sunrise Distribution',  industry_type: 'Warehousing & Distribution' },
+  { id: 'seed-q-5',  processor_type: 'last-mile',  status: 'quoted', quote_value: 560,  confidence_score: 0.88, created_at: daysAgo(10), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners',industry_type: 'Freight Brokerage' },
+  { id: 'seed-q-6',  processor_type: 'drayage',    status: 'won',    quote_value: 1750, confidence_score: 0.96, created_at: daysAgo(12), contact_name: 'Maria Santos',    contact_email: 'maria@fldistribution.com',  company_name: 'FLD — FL Distribution', industry_type: 'Freight & Logistics' },
+  { id: 'seed-q-7',  processor_type: 'warehousing',status: 'won',    quote_value: 4800, confidence_score: 0.93, created_at: daysAgo(14), contact_name: 'Sarah Rodriguez', contact_email: 'sarah@westernlogco.com',     company_name: 'Western LogCo',         industry_type: 'Third-Party Logistics' },
+  { id: 'seed-q-8',  processor_type: 'drayage',    status: 'won',    quote_value: 1300, confidence_score: 0.94, created_at: daysAgo(16), contact_name: 'Mike Chen',       contact_email: 'mike@pacificimports.com',    company_name: 'Pacific Imports LLC',   industry_type: 'Import & Distribution' },
+  { id: 'seed-q-9',  processor_type: 'drayage',    status: 'won',    quote_value: 890,  confidence_score: 0.99, created_at: daysAgo(20), contact_name: 'Tony Reyes',      contact_email: 'tony@empirelogistics.com',  company_name: 'Empire State Logistics',industry_type: 'Intermodal' },
+  { id: 'seed-q-10', processor_type: 'last-mile',  status: 'won',    quote_value: 420,  confidence_score: 0.92, created_at: daysAgo(22), contact_name: 'Lisa Wang',       contact_email: 'lisa@harbortradegroup.com', company_name: 'Harbor Trade Group',    industry_type: 'Import & Distribution' },
+  { id: 'seed-q-11', processor_type: 'drayage',    status: 'lost',   quote_value: 2650, confidence_score: 0.72, created_at: daysAgo(25), contact_name: 'James Kim',       contact_email: 'james@socalfreight.com',    company_name: 'SoCal Freight Partners',industry_type: 'Freight Brokerage' },
+]
+
+const SEED_CARRIERS: Carrier[] = [
+  { id: 'seed-car-1', company_name: 'SoCal Dray Express',       mc_number: 'MC-482910', dot_number: 'DOT-1234567', contact_name: 'Ray Morales', contact_email: 'ray@socaldray.com',     contact_phone: '(310) 555-0142', insurance_status: 'active',  insurance_expiry: daysAgo(-180), performance_score: 9.2, status: 'active' },
+  { id: 'seed-car-2', company_name: 'Inland Empire Transport',  mc_number: 'MC-395821', dot_number: 'DOT-2345678', contact_name: 'Chris Vega', contact_email: 'chris@ietransport.com', contact_phone: '(909) 555-0217', insurance_status: 'active',  insurance_expiry: daysAgo(-210), performance_score: 8.7, status: 'active' },
+  { id: 'seed-car-3', company_name: 'Pacific Gateway Logistics',mc_number: 'MC-512047', dot_number: 'DOT-3456789', contact_name: 'Amy Tran',   contact_email: 'amy@pacgwl.com',       contact_phone: '(562) 555-0384', insurance_status: 'active',  insurance_expiry: daysAgo(-90),  performance_score: 7.5, status: 'active' },
+  { id: 'seed-car-4', company_name: 'Desert Run Carriers',      mc_number: 'MC-288439', dot_number: 'DOT-4567890', contact_name: 'Sam Ortiz', contact_email: 'sam@desertrun.com',    contact_phone: '(760) 555-0093', insurance_status: 'active',  insurance_expiry: daysAgo(-60),  performance_score: 6.8, status: 'active' },
+  { id: 'seed-car-5', company_name: 'Bay Area Freight Co',      mc_number: 'MC-601234', dot_number: 'DOT-5678901', contact_name: 'Janet Lee', contact_email: 'janet@bafreight.com',  contact_phone: '(415) 555-0276', insurance_status: 'active',  insurance_expiry: daysAgo(-300), performance_score: 9.5, status: 'active' },
+  { id: 'seed-car-6', company_name: 'Harbor Intermodal Inc',    mc_number: 'MC-349017', dot_number: 'DOT-6789012', contact_name: 'Tom Blake', contact_email: 'tom@harborimi.com',    contact_phone: '(310) 555-0451', insurance_status: 'expired', insurance_expiry: daysAgo(15),   performance_score: 5.4, status: 'inactive' },
+]
+
+const SEED_SHIPMENTS: Shipment[] = [
+  { id: 'seed-sh-1',  bol_number: 'BOL-2024-0181', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'SoCal Dray Express',       origin: 'Los Angeles, CA', destination: 'Ontario, CA',         equipment_type: '40ft Container', service_type: 'Drayage',      pickup_date: daysAgo(5),  delivery_date: daysAgo(4),  actual_pickup: daysAgo(5),  actual_delivery: daysAgo(4),  status: 'delivered',  quote_value: 2100 },
+  { id: 'seed-sh-2',  bol_number: 'BOL-2024-0182', customer_name: 'Mike Chen',       customer_company: 'Pacific Imports LLC',    carrier_name: 'Inland Empire Transport',  origin: 'Long Beach, CA',  destination: 'Chino, CA',           equipment_type: '40ft Container', service_type: 'Drayage',      pickup_date: daysAgo(3),  delivery_date: daysAgo(2),  actual_pickup: daysAgo(3),  actual_delivery: null,        status: 'in-transit', quote_value: 1450 },
+  { id: 'seed-sh-3',  bol_number: 'BOL-2024-0183', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Pacific Gateway Logistics',origin: 'Los Angeles, CA', destination: 'Fontana, CA',         equipment_type: '53ft Trailer',   service_type: 'Transloading', pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 3200 },
+  { id: 'seed-sh-4',  bol_number: 'BOL-2024-0184', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'SoCal Dray Express',       origin: 'San Pedro, CA',   destination: 'Rancho Cucamonga, CA',equipment_type: '20ft Container', service_type: 'Drayage',      pickup_date: daysAgo(7),  delivery_date: daysAgo(6),  actual_pickup: daysAgo(7),  actual_delivery: daysAgo(6),  status: 'delivered',  quote_value: 980  },
+  { id: 'seed-sh-5',  bol_number: 'BOL-2024-0185', customer_name: 'James Kim',       customer_company: 'SoCal Freight Partners', carrier_name: 'Desert Run Carriers',      origin: 'Carson, CA',      destination: 'Riverside, CA',       equipment_type: 'Straight Truck', service_type: 'Last Mile',    pickup_date: daysAgo(1),  delivery_date: daysAgo(0),  actual_pickup: null,        actual_delivery: null,        status: 'in-transit', quote_value: 560  },
+  { id: 'seed-sh-6',  bol_number: 'BOL-2024-0179', customer_name: 'Maria Santos',    customer_company: 'FLD — FL Distribution',  carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA', destination: 'Colton, CA',          equipment_type: '40ft Container', service_type: 'Drayage',      pickup_date: daysAgo(12), delivery_date: daysAgo(11), actual_pickup: daysAgo(12), actual_delivery: daysAgo(11), status: 'delivered',  quote_value: 1750 },
+  { id: 'seed-sh-7',  bol_number: 'BOL-2024-0177', customer_name: 'Sarah Rodriguez', customer_company: 'Western LogCo',          carrier_name: 'Inland Empire Transport',  origin: 'Long Beach, CA',  destination: 'Ontario, CA',         equipment_type: '40ft Container', service_type: 'Transloading', pickup_date: daysAgo(14), delivery_date: daysAgo(13), actual_pickup: daysAgo(14), actual_delivery: daysAgo(13), status: 'delivered',  quote_value: 4800 },
+  { id: 'seed-sh-8',  bol_number: 'BOL-2024-0170', customer_name: 'David Park',      customer_company: 'Sunrise Distribution',   carrier_name: 'Bay Area Freight Co',      origin: 'Los Angeles, CA', destination: 'San Bernardino, CA',  equipment_type: '53ft Trailer',   service_type: 'Drayage',      pickup_date: daysAgo(2),  delivery_date: daysAgo(1),  actual_pickup: daysAgo(2),  actual_delivery: null,        status: 'in-transit', quote_value: 1800 },
+]
+
+const SEED_RECENT_QUOTES: RecentQuote[] = [
+  { id: 'seed-rq-1', processor_type: 'drayage',    status: 'won',    quote_value: 2100, created_at: daysAgo(3),  contact_name: 'Maria Santos',    company_name: 'FLD — FL Distribution' },
+  { id: 'seed-rq-2', processor_type: 'drayage',    status: 'won',    quote_value: 1450, created_at: daysAgo(5),  contact_name: 'Mike Chen',       company_name: 'Pacific Imports LLC' },
+  { id: 'seed-rq-3', processor_type: 'warehousing',status: 'quoted', quote_value: 3200, created_at: daysAgo(6),  contact_name: 'Sarah Rodriguez', company_name: 'Western LogCo' },
+  { id: 'seed-rq-4', processor_type: 'drayage',    status: 'won',    quote_value: 980,  created_at: daysAgo(8),  contact_name: 'David Park',      company_name: 'Sunrise Distribution' },
+  { id: 'seed-rq-5', processor_type: 'last-mile',  status: 'quoted', quote_value: 560,  created_at: daysAgo(10), contact_name: 'James Kim',       company_name: 'SoCal Freight Partners' },
+]
+
+const ALL_HARDCODED_IDS = new Set([
+  ...SEED_ACCOUNTS.map(a => a.id),
+  ...SEED_QUOTES.map(q => q.id),
+  ...SEED_CARRIERS.map(c => c.id),
+  ...SEED_SHIPMENTS.map(s => s.id),
+  ...SEED_RECENT_QUOTES.map(r => r.id),
+])
+
+function HardcodedTag({ id, onDismiss }: { id: string; onDismiss: (id: string) => void }) {
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold uppercase tracking-wide border border-amber-200">
+        Hardcoded
+      </span>
+      <button
+        onClick={e => { e.stopPropagation(); onDismiss(id) }}
+        className="text-[10px] text-amber-500 hover:text-red-500 transition-colors font-medium leading-none"
+        title="Remove this placeholder entry"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+function Customers({ accounts, loading, hardcodedIds, onDismissHardcoded }: {
+  accounts: Account[]
+  loading: boolean
+  hardcodedIds: Set<string>
+  onDismissHardcoded: (id: string) => void
+}) {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
 
@@ -432,6 +525,7 @@ function Customers({ accounts, loading }: { accounts: Account[]; loading: boolea
             <tr key={a.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD>
                 <div className="font-medium">{a.business_name}</div>
+                {hardcodedIds.has(a.id) && <HardcodedTag id={a.id} onDismiss={onDismissHardcoded} />}
               </TD>
               <TD>{a.industry_type ?? '—'}</TD>
               <TD>
@@ -454,7 +548,12 @@ function Customers({ accounts, loading }: { accounts: Account[]; loading: boolea
   )
 }
 
-function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
+function Quotes({ quotes, loading, hardcodedIds, onDismissHardcoded }: {
+  quotes: Quote[]
+  loading: boolean
+  hardcodedIds: Set<string>
+  onDismissHardcoded: (id: string) => void
+}) {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -503,6 +602,7 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
               <TD>
                 <div className="font-medium">{q.contact_name ?? '—'}</div>
                 {q.contact_email && <div className="text-xs text-[var(--color-text-3)]">{q.contact_email}</div>}
+                {hardcodedIds.has(q.id) && <HardcodedTag id={q.id} onDismiss={onDismissHardcoded} />}
               </TD>
               <TD>{q.company_name ?? '—'}</TD>
               <TD>{q.industry_type ?? '—'}</TD>
@@ -522,7 +622,12 @@ function Quotes({ quotes, loading }: { quotes: Quote[]; loading: boolean }) {
   )
 }
 
-function Carriers({ carriers, loading }: { carriers: Carrier[]; loading: boolean }) {
+function Carriers({ carriers, loading, hardcodedIds, onDismissHardcoded }: {
+  carriers: Carrier[]
+  loading: boolean
+  hardcodedIds: Set<string>
+  onDismissHardcoded: (id: string) => void
+}) {
   const [search, setSearch] = useState('')
 
   const filtered = carriers.filter(c => {
@@ -558,6 +663,7 @@ function Carriers({ carriers, loading }: { carriers: Carrier[]; loading: boolean
             <tr key={c.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
               <TD>
                 <div className="font-medium">{c.company_name}</div>
+                {hardcodedIds.has(c.id) && <HardcodedTag id={c.id} onDismiss={onDismissHardcoded} />}
               </TD>
               <TD>{c.mc_number ?? '—'}</TD>
               <TD>{c.dot_number ?? '—'}</TD>
@@ -581,7 +687,12 @@ function Carriers({ carriers, loading }: { carriers: Carrier[]; loading: boolean
   )
 }
 
-function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boolean }) {
+function Shipments({ shipments, loading, hardcodedIds, onDismissHardcoded }: {
+  shipments: Shipment[]
+  loading: boolean
+  hardcodedIds: Set<string>
+  onDismissHardcoded: (id: string) => void
+}) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const shipmentNumbers = new Map(
@@ -626,7 +737,10 @@ function Shipments({ shipments, loading }: { shipments: Shipment[]; loading: boo
         <Table headers={['Shipment ID', 'Customer', 'Carrier', 'Route', 'Equipment', 'Service', 'Pickup', 'Delivery', 'Value', 'Status']}>
           {filtered.map(s => (
             <tr key={s.id} className="hover:bg-[var(--color-bg-2)] transition-colors">
-              <TD><span className="font-mono text-xs">{s.displayId}</span></TD>
+              <TD>
+                <span className="font-mono text-xs">{s.displayId}</span>
+                {hardcodedIds.has(s.id) && <HardcodedTag id={s.id} onDismiss={onDismissHardcoded} />}
+              </TD>
               <TD>{s.customer_company ?? s.customer_name ?? '—'}</TD>
               <TD>{s.carrier_name ?? '—'}</TD>
               <TD>
@@ -1242,7 +1356,6 @@ function PricingIntelligence() {
 const ANALYTICS_PROMPTS = [
   'What is the quote win rate this month?',
   'Show quote conversion ratio by service type',
-  'Which lanes have the highest margin?',
   'Carrier performance summary',
   'Revenue breakdown by customer',
   'What are the top reasons for quote decline?',
@@ -1535,6 +1648,31 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
   })
   const loaded = useRef<Set<CrmSubTab>>(new Set())
 
+  const [dismissedHardcoded, setDismissedHardcoded] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('crm-dismissed-hardcoded')
+      return new Set(stored ? JSON.parse(stored) as string[] : [])
+    } catch { return new Set<string>() }
+  })
+
+  function dismissHardcoded(id: string) {
+    setDismissedHardcoded(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem('crm-dismissed-hardcoded', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
+
+  const mergedAccounts = [...data.accounts, ...SEED_ACCOUNTS.filter(s => !dismissedHardcoded.has(s.id))]
+  const mergedQuotes = [...data.quotes, ...SEED_QUOTES.filter(s => !dismissedHardcoded.has(s.id))]
+  const mergedCarriers = [...data.carriers, ...SEED_CARRIERS.filter(s => !dismissedHardcoded.has(s.id))]
+  const mergedShipments = [...data.shipments, ...SEED_SHIPMENTS.filter(s => !dismissedHardcoded.has(s.id))]
+  const mergedRecentQuotes = [
+    ...(data.dashboard?.recentQuotes ?? []),
+    ...SEED_RECENT_QUOTES.filter(s => !dismissedHardcoded.has(s.id)),
+  ]
+
   async function fetchSection(section: CrmSubTab) {
     if (section === 'analytics' || section === 'pricing' || loaded.current.has(section)) return
     setLoading(prev => ({ ...prev, [section]: true }))
@@ -1625,19 +1763,44 @@ export default function CrmPanel({ userName = '' }: CrmPanelProps) {
 
       {/* Content */}
       {subTab === 'dashboard' && (
-        <Dashboard stats={data.dashboard?.stats ?? null} recent={data.dashboard?.recentQuotes ?? []} />
+        <Dashboard
+          stats={data.dashboard?.stats ?? null}
+          recent={mergedRecentQuotes}
+          hardcodedIds={ALL_HARDCODED_IDS}
+          onDismissHardcoded={dismissHardcoded}
+        />
       )}
       {subTab === 'customers' && (
-        <Customers accounts={data.accounts} loading={loading.customers} />
+        <Customers
+          accounts={mergedAccounts}
+          loading={loading.customers}
+          hardcodedIds={ALL_HARDCODED_IDS}
+          onDismissHardcoded={dismissHardcoded}
+        />
       )}
       {subTab === 'quotes' && (
-        <Quotes quotes={data.quotes} loading={loading.quotes} />
+        <Quotes
+          quotes={mergedQuotes}
+          loading={loading.quotes}
+          hardcodedIds={ALL_HARDCODED_IDS}
+          onDismissHardcoded={dismissHardcoded}
+        />
       )}
       {subTab === 'carriers' && (
-        <Carriers carriers={data.carriers} loading={loading.carriers} />
+        <Carriers
+          carriers={mergedCarriers}
+          loading={loading.carriers}
+          hardcodedIds={ALL_HARDCODED_IDS}
+          onDismissHardcoded={dismissHardcoded}
+        />
       )}
       {subTab === 'shipments' && (
-        <Shipments shipments={data.shipments} loading={loading.shipments} />
+        <Shipments
+          shipments={mergedShipments}
+          loading={loading.shipments}
+          hardcodedIds={ALL_HARDCODED_IDS}
+          onDismissHardcoded={dismissHardcoded}
+        />
       )}
       {subTab === 'pricing' && (
         <PricingIntelligence />

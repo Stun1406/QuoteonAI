@@ -66,8 +66,8 @@ export async function GET() {
 // ── Quote outcome detection ───────────────────────────────────────────────────
 function detectQuoteOutcome(text: string): 'won' | 'lost' | null {
   const t = text.toLowerCase()
-  if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed)\b/.test(t)) return 'won'
-  if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high)\b/.test(t)) return 'lost'
+  if (/\b(accept|accepted|approve|approved|confirm|confirmed|proceed|yes please|go ahead|sounds good|looks good|perfect|please proceed|we accept|i accept|moving forward|let'?s go|we'?ll take it|happy to proceed|that works|this works|all good|that'?s great|great thank|thank you for|works for us|we'?re good|good to go|let'?s proceed|please go ahead|that'?s perfect|this is perfect|we agree|agreed|all set|we'?ll take|we will take|ready to proceed|ready to move|confirming)\b/.test(t)) return 'won'
+  if (/\b(decline|declined|reject|rejected|pass|not interested|no thanks|won'?t work|can'?t proceed|cancel|cancelled|we'?ll pass|not moving forward|unfortunately|going with someone|going elsewhere|too expensive|too high|not for us|won'?t be|cannot proceed|not proceeding|pass on this|going another route|found another|other option|different provider)\b/.test(t)) return 'lost'
   return null
 }
 
@@ -247,6 +247,7 @@ export async function POST(req: NextRequest) {
           const outcome = detectQuoteOutcome(bodyText)
           if (outcome) {
             await sql`UPDATE message_threads SET status = ${outcome}, closed_at = NOW(), updated_at = NOW() WHERE thread_id = ${processThreadId}`
+            await sql`UPDATE email_threads SET status = ${outcome}, updated_at = NOW() WHERE id = ${emailThread.id}`
             console.log(`[webhook/email] Auto-detected quote outcome: ${outcome} for thread ${processThreadId}`)
           }
         }
