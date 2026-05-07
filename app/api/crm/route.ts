@@ -11,13 +11,16 @@ export async function GET(req: NextRequest) {
     switch (section) {
 
       case 'dashboard': {
-        const [accountRows, quoteRows, recentRows, shipmentRows] = await Promise.all([
+        const [accountRows, quoteRows, recentRows, shipmentRows, serviceMixRows] = await Promise.all([
           sql`SELECT COUNT(*)::int AS count FROM companies WHERE tenant_id = ${tenantId}`,
           sql`SELECT
                 COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE status = 'quoted')::int AS quoted,
                 COUNT(*) FILTER (WHERE status = 'won')::int AS won,
-                AVG(quote_value) FILTER (WHERE quote_value IS NOT NULL) AS avg_value
+                COUNT(*) FILTER (WHERE status IN ('new', 'in-progress', 'processing'))::int AS active,
+                AVG(quote_value) FILTER (WHERE quote_value IS NOT NULL) AS avg_value,
+                SUM(quote_value) FILTER (WHERE status = 'won' AND quote_value IS NOT NULL) AS won_revenue,
+                AVG(confidence_score) FILTER (WHERE confidence_score IS NOT NULL) AS avg_confidence
               FROM message_threads WHERE tenant_id = ${tenantId}`,
           sql`SELECT mt.id, mt.processor_type, mt.status, mt.quote_value, mt.created_at,
                      c.name AS contact_name, co.business_name AS company_name
@@ -30,6 +33,10 @@ export async function GET(req: NextRequest) {
                      COUNT(*) FILTER (WHERE status = 'delivered')::int AS delivered,
                      COUNT(*) FILTER (WHERE status = 'in-transit')::int AS in_transit
               FROM crm_shipments WHERE tenant_id = ${tenantId}`.catch(() => [{ count: 0, delivered: 0, in_transit: 0 }]),
+          sql`SELECT processor_type, COUNT(*)::int AS count
+              FROM message_threads
+              WHERE tenant_id = ${tenantId}
+              GROUP BY processor_type`.catch(() => []),
         ])
 
         const q = quoteRows[0] ?? {}
@@ -44,6 +51,12 @@ export async function GET(req: NextRequest) {
             avgQuoteValue: q.avg_value ? Number(q.avg_value).toFixed(0) : null,
             totalShipments: s.count ?? 0,
             inTransit: s.in_transit ?? 0,
+            serviceMix: serviceMixRows,
+            pipelineActive: q.active ?? 0,
+            pipelineQuoted: q.quoted ?? 0,
+            pipelineWon: q.won ?? 0,
+            wonRevenue: q.won_revenue ? Number(q.won_revenue).toFixed(0) : null,
+            avgConfidence: q.avg_confidence ? Math.round(Number(q.avg_confidence) * 100) : null,
           },
           recentQuotes: recentRows,
         })

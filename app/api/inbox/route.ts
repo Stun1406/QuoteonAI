@@ -159,10 +159,12 @@ export async function GET() {
             }))
 
           const isChatbotQuote = firstInbound.body_text.startsWith('[QuotyAI')
+          const isWhatsAppQuote = firstInbound.body_text.startsWith('[WhatsApp Quote Request')
+          const sourceTag = isWhatsAppQuote ? 'whatsapp' : isChatbotQuote ? 'chatbot' : 'email'
           const company = extractCompany(thread.participant_from, firstInbound.body_text)
           const phone = extractPhone(firstInbound.body_text)
-          // For chatbot quotes show the customer's real name as the sender label
-          const senderName = isChatbotQuote
+          // For chatbot / whatsapp quotes show the customer's real name as the sender label
+          const senderName = (isChatbotQuote || isWhatsAppQuote)
             ? extractChatbotCustomerName(firstInbound.body_text)
             : null
 
@@ -180,6 +182,7 @@ export async function GET() {
             isRead,
             responses,
             source: 'real',
+            sourceTag,
             company: company ?? undefined,
             phone: phone ?? undefined,
             processThreadId: thread.process_thread_id ?? undefined,

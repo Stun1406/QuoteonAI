@@ -64,6 +64,7 @@ type MockEmail = {
   customerTier?: string
   isRead?: boolean
   source?: 'real' | 'mock'
+  sourceTag?: 'email' | 'whatsapp' | 'chatbot'
   emailThreadId?: string
   processThreadId?: string
   quoteOutcome?: 'won' | 'lost'
@@ -1706,8 +1707,23 @@ export default function QuoteTool() {
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {email.source === 'real' && (
+                      {email.sourceTag === 'email' && (
+                        <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold uppercase tracking-wide">
+                          Gmail
+                        </span>
+                      )}
+                      {email.sourceTag === 'whatsapp' && (
                         <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-semibold uppercase tracking-wide">
+                          WhatsApp
+                        </span>
+                      )}
+                      {email.sourceTag === 'chatbot' && (
+                        <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold uppercase tracking-wide">
+                          Chat
+                        </span>
+                      )}
+                      {email.source === 'real' && !email.sourceTag && (
+                        <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold uppercase tracking-wide">
                           Live
                         </span>
                       )}

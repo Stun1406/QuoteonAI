@@ -345,7 +345,7 @@ function formatWhatsAppSummary(
   lines.push(``)
   lines.push(`📧 Full quote sent to ${quote.customer_email}`)
   lines.push(``)
-  lines.push(`Reply with any questions or type *RESET* to start a new conversation.`)
+  lines.push(`Reply with any questions, Confirm Quote via email, or type *RESET* to start a new conversation.`)
 
   return lines.join('\n')
 }
