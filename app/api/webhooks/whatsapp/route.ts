@@ -6,6 +6,7 @@ import { createMessageThread, generateThreadId, updateThreadProcessorType } from
 import { addArtifactToThread } from '@/lib/db/services/thread-service'
 import { createEmailThread, insertEmailMessage, normalizeSubject } from '@/lib/db/tables/email-thread'
 import { sql } from '@/lib/db/client'
+import { createContact, findContactByPhone } from '@/lib/db/tables/contact'
 import { textToHtml } from '@/lib/llm/formatter'
 import { formatCurrency } from '@/lib/utils/currency'
 
@@ -81,7 +82,6 @@ Drayage (port container move to a warehouse or destination)
 Required details:
   • Port — LA/LB, Houston, NY/NJ, Savannah, or Seattle
   • Container size — 20ft, 40ft, or 45ft/53ft
-  • Weight — Regular (up to 43,000 lbs), Heavy (43–47k lbs), or Very Heavy (47–50k lbs)
   • Destination city — e.g. Ontario, Carson, Fontana, Chino
   • Accessorials — TCF, Prepaid Pier Pass, Chassis Split (fine if none)
 
@@ -124,6 +124,8 @@ RULES:
   • If unsure which service they need, ask naturally — do not assume
   • Never give specific rates in conversation — pricing is sent in the quote email
   • Do NOT ask for name or email before the shipment details are confirmed
+  • Never ask about container weight — assume regular weight unless the customer explicitly uses the word "heavy" or "very heavy" in their own message; if they do, pass that through to generate_quote as container_weight
+  • If the customer's name and email are already present anywhere in this conversation, never ask for them again — use them directly when calling generate_quote
   • Once generate_quote has been called, the conversation is complete
   • If the customer thanks you or acknowledges the quote, reply only with a brief warm closing — nothing else`
 
@@ -560,12 +562,26 @@ export async function POST(req: NextRequest) {
     push(phone, { role: 'user', content: body })
     const messages = [...history, { role: 'user', content: body }]
 
+    // On a fresh session, check if this number has quoted before
+    let systemPrompt = SYSTEM_PROMPT
+    if (history.length === 0) {
+      try {
+        const tenantId = process.env.TENANT_ID
+        if (tenantId) {
+          const returning = await findContactByPhone(tenantId, phone)
+          if (returning?.name && returning?.email) {
+            systemPrompt += `\n\nRETURNING CUSTOMER: This customer has contacted us before. Their name is "${returning.name}" and email is "${returning.email}". Use these directly — do not ask for name or email.`
+          }
+        }
+      } catch { /* non-critical — proceed without context */ }
+    }
+
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
         tools: TOOLS,
         tool_choice: 'auto',
         temperature: 0.4,
@@ -588,6 +604,11 @@ export async function POST(req: NextRequest) {
       if (call?.function?.name === 'generate_quote') {
         const args = JSON.parse(call.function.arguments) as QuoteArgs
         const reply = await handleGenerateQuote(args)
+        // Save contact so returning sessions can skip name/email collection
+        const tenantId = process.env.TENANT_ID
+        if (tenantId) {
+          createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone }).catch(() => {})
+        }
         push(phone, { role: 'assistant', content: reply })
         return twiml(reply)
       }

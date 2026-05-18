@@ -57,3 +57,13 @@ export async function getContactById(id: string): Promise<ContactRow | null> {
   const rows = await sql`SELECT * FROM contacts WHERE id = ${id} LIMIT 1`
   return rows[0] as ContactRow || null
 }
+
+export async function findContactByPhone(tenantId: string, phone: string): Promise<ContactRow | null> {
+  const rows = await sql`
+    SELECT * FROM contacts
+    WHERE tenant_id = ${tenantId} AND phone = ${phone}
+    ORDER BY last_interaction_at DESC
+    LIMIT 1
+  `
+  return rows[0] as ContactRow || null
+}
