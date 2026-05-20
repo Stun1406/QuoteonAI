@@ -532,22 +532,19 @@ export function GET() {
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
-    const from = (formData.get('From') as string | null) ?? ''
-    const body = ((formData.get('Body') as string | null) ?? '').trim()
-    console.log('[wa debug] POST received from:', from, 'body:', body)
 
-    // DIAGNOSTIC: respond immediately to confirm Twilio is hitting the webhook
-    return twiml(`Debug OK — from: ${from || 'empty'}, body: ${body || 'empty'}`)
-
-    // eslint-disable-next-line no-unreachable
     const params: Record<string, string> = {}
     for (const [k, v] of formData.entries()) {
       if (typeof v === 'string') params[k] = v
     }
 
     if (!verifyTwilioSignature(req, params)) {
-      console.warn('[webhook/whatsapp] Signature verification failed — proceeding anyway for diagnostics')
+      console.warn('[webhook/whatsapp] Signature verification failed')
+      return new NextResponse('Forbidden', { status: 403 })
     }
+
+    const from = (formData.get('From') as string | null) ?? ''
+    const body = ((formData.get('Body') as string | null) ?? '').trim()
 
     if (!from || !body) return emptyTwiml()
 
@@ -575,7 +572,8 @@ export async function POST(req: NextRequest) {
     let returningContact: { name: string; email: string } | null = null
     if (history.length === 0) {
       try {
-        returningContact = await getWhatsAppContact(phone)
+        const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 2000))
+        returningContact = await Promise.race([getWhatsAppContact(phone), timeout])
         console.log('[wa returning]', phone, returningContact ? `found: ${returningContact.name}` : 'not found')
       } catch (e) {
         console.error('[wa returning] lookup failed:', e)
