@@ -6,7 +6,7 @@ import { createMessageThread, generateThreadId, updateThreadProcessorType } from
 import { addArtifactToThread } from '@/lib/db/services/thread-service'
 import { createEmailThread, insertEmailMessage, normalizeSubject } from '@/lib/db/tables/email-thread'
 import { sql } from '@/lib/db/client'
-import { createContact, findContactByPhone } from '@/lib/db/tables/contact'
+import { upsertWhatsAppContact, getWhatsAppContact } from '@/lib/whatsapp/contacts'
 import { textToHtml } from '@/lib/llm/formatter'
 import { formatCurrency } from '@/lib/utils/currency'
 
@@ -564,19 +564,16 @@ export async function POST(req: NextRequest) {
 
     // On a fresh session, check if this number has quoted before
     let systemPrompt = SYSTEM_PROMPT
+    let returningContact: { name: string; email: string } | null = null
     if (history.length === 0) {
-      const tenantId = process.env.TENANT_ID
-      console.log('[wa returning] fresh session for', phone, '| tenantId set:', !!tenantId)
-      if (tenantId) {
-        try {
-          const returning = await findContactByPhone(tenantId, phone)
-          console.log('[wa returning] contact lookup result:', returning ? `${returning.name} / ${returning.email}` : 'not found')
-          if (returning?.name && returning?.email) {
-            systemPrompt += `\n\n⚠️ RETURNING CUSTOMER — CRITICAL INSTRUCTION: Do NOT ask for this customer's name or email. We already have them on file. Name: "${returning.name}", Email: "${returning.email}". Instead of collecting contact details, send one confirmation message: "Just to confirm — shall I send the quote to ${returning.name} at ${returning.email}?" If they say yes, call generate_quote immediately using these details. If they want to change name or email, update accordingly then call generate_quote.`
-          }
-        } catch (e) {
-          console.error('[wa returning] contact lookup failed:', e)
-        }
+      try {
+        returningContact = await getWhatsAppContact(phone)
+        console.log('[wa returning]', phone, returningContact ? `found: ${returningContact.name}` : 'not found')
+      } catch (e) {
+        console.error('[wa returning] lookup failed:', e)
+      }
+      if (returningContact) {
+        systemPrompt += `\n\nRETURNING CUSTOMER: Name on file: "${returningContact.name}", Email: "${returningContact.email}". Do NOT ask for name or email. When ready to send the quote, send ONE message: "Just to confirm — shall I send this to ${returningContact.name} at ${returningContact.email}?" If yes, call generate_quote with these details immediately.`
       }
     }
 
@@ -585,7 +582,12 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        messages: [
+          { role: 'system', content: systemPrompt },
+          // Inject returning-customer memory as first assistant turn so the LLM treats it as established fact
+          ...(returningContact ? [{ role: 'assistant' as const, content: `I have your details on file from a previous quote. I'll confirm them with you before sending.` }] : []),
+          ...messages,
+        ],
         tools: TOOLS,
         tool_choice: 'auto',
         temperature: 0.4,
@@ -608,15 +610,10 @@ export async function POST(req: NextRequest) {
       if (call?.function?.name === 'generate_quote') {
         const args = JSON.parse(call.function.arguments) as QuoteArgs
         const reply = await handleGenerateQuote(args)
-        // Save contact before returning — must be awaited so serverless function doesn't exit before the DB write completes
-        const tenantId = process.env.TENANT_ID
-        if (tenantId) {
-          await createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone })
-            .then(() => console.log('[wa contact] saved:', args.customer_name, phone))
-            .catch(e => console.error('[wa contact] save failed:', e))
-        } else {
-          console.warn('[wa contact] TENANT_ID not set — contact not saved')
-        }
+        // Save contact before returning — awaited so serverless function doesn't exit before the DB write completes
+        await upsertWhatsAppContact(phone, args.customer_name, args.customer_email)
+          .then(() => console.log('[wa contact] saved:', args.customer_name, phone))
+          .catch(e => console.error('[wa contact] save failed:', e))
         push(phone, { role: 'assistant', content: reply })
         return twiml(reply)
       }
