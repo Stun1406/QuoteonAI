@@ -108,9 +108,7 @@ Required details:
 ---
 
 CONTACT DETAILS — collect these only after all shipment details are confirmed:
-  1. Ask for the customer's full name
-  2. In a separate message, ask for their best email address
-  3. Then call generate_quote
+  Ask for the customer's full name and best email address in a single message (e.g. "Could I get your name and email address to send the quote?"). If they reply with only one, ask for the missing one as a follow-up. Once both are confirmed, call generate_quote.
 
 ---
 
@@ -125,6 +123,7 @@ RULES:
   • Never give specific rates in conversation — pricing is sent in the quote email
   • Do NOT ask for name or email before the shipment details are confirmed
   • Never ask about container weight — assume regular weight unless the customer explicitly uses the word "heavy" or "very heavy" in their own message; if they do, pass that through to generate_quote as container_weight
+  • Track every piece of information the customer provides throughout the conversation — never ask for something they have already given, even if it was several messages ago
   • If the customer's name and email are already present anywhere in this conversation, never ask for them again — use them directly when calling generate_quote
   • Once generate_quote has been called, the conversation is complete
   • If the customer thanks you or acknowledges the quote, reply only with a brief warm closing — nothing else`
@@ -570,7 +569,7 @@ export async function POST(req: NextRequest) {
         if (tenantId) {
           const returning = await findContactByPhone(tenantId, phone)
           if (returning?.name && returning?.email) {
-            systemPrompt += `\n\nRETURNING CUSTOMER: This customer has contacted us before. Their name is "${returning.name}" and email is "${returning.email}". Use these directly — do not ask for name or email.`
+            systemPrompt += `\n\nRETURNING CUSTOMER: This customer has quoted with us before. Their name on file is "${returning.name}" and email is "${returning.email}". When you reach the contact details step, confirm with them in a single message (e.g. "Just to confirm — shall I send the quote to ${returning.name} at ${returning.email}?"). If they confirm, use these details directly. If they want to change either one, update accordingly.`
           }
         }
       } catch { /* non-critical — proceed without context */ }
