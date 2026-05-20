@@ -580,12 +580,14 @@ export async function POST(req: NextRequest) {
       try {
         const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 2000))
         returningContact = await Promise.race([getWhatsAppContact(phone), timeout])
-        console.log('[wa returning]', phone, returningContact ? `found: ${returningContact!.name}` : 'not found')
+        console.log('[wa returning]', phone, returningContact != null ? `found: ${(returningContact as { name: string }).name}` : 'not found')
       } catch (e) {
         console.error('[wa returning] lookup failed:', e)
       }
-      if (returningContact) {
-        systemPrompt += `\n\nRETURNING CUSTOMER: Name on file: "${returningContact.name}", Email: "${returningContact.email}". Do NOT ask for name or email. When ready to send the quote, send ONE message: "Just to confirm — shall I send this to ${returningContact.name} at ${returningContact.email}?" If yes, call generate_quote with these details immediately.`
+      if (returningContact != null) {
+        const rcName = (returningContact as { name: string; email: string }).name
+        const rcEmail = (returningContact as { name: string; email: string }).email
+        systemPrompt += `\n\nRETURNING CUSTOMER: Name on file: "${rcName}", Email: "${rcEmail}". Do NOT ask for name or email. When ready to send the quote, send ONE message: "Just to confirm — shall I send this to ${rcName} at ${rcEmail}?" If yes, call generate_quote with these details immediately.`
       }
     }
 
