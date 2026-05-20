@@ -523,6 +523,10 @@ function emptyTwiml(): NextResponse {
   })
 }
 
+export function GET() {
+  return new NextResponse('WhatsApp webhook alive ✓', { status: 200 })
+}
+
 // ── Main webhook handler ──────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
