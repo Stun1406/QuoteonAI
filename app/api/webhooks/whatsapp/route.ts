@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 10 // Vercel hobby plan limit
 import { createHmac } from 'crypto'
 import { getMessages, push, reset } from '@/lib/whatsapp/session'
 import { sendEmail } from '@/lib/email/send'
@@ -593,7 +595,7 @@ export async function POST(req: NextRequest) {
         temperature: 0.4,
         max_tokens: 500,
       }),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(8000),
     })
 
     if (!res.ok) {
