@@ -565,15 +565,19 @@ export async function POST(req: NextRequest) {
     // On a fresh session, check if this number has quoted before
     let systemPrompt = SYSTEM_PROMPT
     if (history.length === 0) {
-      try {
-        const tenantId = process.env.TENANT_ID
-        if (tenantId) {
+      const tenantId = process.env.TENANT_ID
+      console.log('[wa returning] fresh session for', phone, '| tenantId set:', !!tenantId)
+      if (tenantId) {
+        try {
           const returning = await findContactByPhone(tenantId, phone)
+          console.log('[wa returning] contact lookup result:', returning ? `${returning.name} / ${returning.email}` : 'not found')
           if (returning?.name && returning?.email) {
-            systemPrompt += `\n\nRETURNING CUSTOMER: This customer has quoted with us before. Their name on file is "${returning.name}" and email is "${returning.email}". When you reach the contact details step, confirm with them in a single message (e.g. "Just to confirm — shall I send the quote to ${returning.name} at ${returning.email}?"). If they confirm, use these details directly. If they want to change either one, update accordingly.`
+            systemPrompt += `\n\n⚠️ RETURNING CUSTOMER — CRITICAL INSTRUCTION: Do NOT ask for this customer's name or email. We already have them on file. Name: "${returning.name}", Email: "${returning.email}". Instead of collecting contact details, send one confirmation message: "Just to confirm — shall I send the quote to ${returning.name} at ${returning.email}?" If they say yes, call generate_quote immediately using these details. If they want to change name or email, update accordingly then call generate_quote.`
           }
+        } catch (e) {
+          console.error('[wa returning] contact lookup failed:', e)
         }
-      } catch { /* non-critical — proceed without context */ }
+      }
     }
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -607,7 +611,11 @@ export async function POST(req: NextRequest) {
         // Save contact before returning — must be awaited so serverless function doesn't exit before the DB write completes
         const tenantId = process.env.TENANT_ID
         if (tenantId) {
-          await createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone }).catch(() => {})
+          await createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone })
+            .then(() => console.log('[wa contact] saved:', args.customer_name, phone))
+            .catch(e => console.error('[wa contact] save failed:', e))
+        } else {
+          console.warn('[wa contact] TENANT_ID not set — contact not saved')
         }
         push(phone, { role: 'assistant', content: reply })
         return twiml(reply)
