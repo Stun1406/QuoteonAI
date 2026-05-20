@@ -532,8 +532,14 @@ export function GET() {
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
+    const from = (formData.get('From') as string | null) ?? ''
+    const body = ((formData.get('Body') as string | null) ?? '').trim()
+    console.log('[wa debug] POST received from:', from, 'body:', body)
 
-    // Collect all fields for signature verification
+    // DIAGNOSTIC: respond immediately to confirm Twilio is hitting the webhook
+    return twiml(`Debug OK — from: ${from || 'empty'}, body: ${body || 'empty'}`)
+
+    // eslint-disable-next-line no-unreachable
     const params: Record<string, string> = {}
     for (const [k, v] of formData.entries()) {
       if (typeof v === 'string') params[k] = v
@@ -542,9 +548,6 @@ export async function POST(req: NextRequest) {
     if (!verifyTwilioSignature(req, params)) {
       console.warn('[webhook/whatsapp] Signature verification failed — proceeding anyway for diagnostics')
     }
-
-    const from = (formData.get('From') as string | null) ?? ''     // e.g. "whatsapp:+12025550196"
-    const body = ((formData.get('Body') as string | null) ?? '').trim()
 
     if (!from || !body) return emptyTwiml()
 
