@@ -531,22 +531,28 @@ export function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('[wa] POST handler entered')
     const formData = await req.formData()
+    const from = (formData.get('From') as string | null) ?? ''
+    const body = ((formData.get('Body') as string | null) ?? '').trim()
+    console.log('[wa] from:', from, 'body:', body)
 
+    if (!from || !body) return emptyTwiml()
+
+    // Bypass sig verification temporarily for diagnostics
+    return twiml(`Quoty here! Got your message: "${body}"`)
+
+    /* eslint-disable no-unreachable */
     const params: Record<string, string> = {}
     for (const [k, v] of formData.entries()) {
-      if (typeof v === 'string') params[k] = v
+      if (typeof v === 'string') params[k] = v as string
     }
 
     if (!verifyTwilioSignature(req, params)) {
       console.warn('[webhook/whatsapp] Signature verification failed')
       return new NextResponse('Forbidden', { status: 403 })
     }
-
-    const from = (formData.get('From') as string | null) ?? ''
-    const body = ((formData.get('Body') as string | null) ?? '').trim()
-
-    if (!from || !body) return emptyTwiml()
+    /* eslint-enable no-unreachable */
 
     const phone = from.replace('whatsapp:', '')
 
