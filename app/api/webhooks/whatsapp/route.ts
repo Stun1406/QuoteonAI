@@ -580,7 +580,7 @@ export async function POST(req: NextRequest) {
       try {
         const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 2000))
         returningContact = await Promise.race([getWhatsAppContact(phone), timeout])
-        console.log('[wa returning]', phone, returningContact ? `found: ${returningContact.name}` : 'not found')
+        console.log('[wa returning]', phone, returningContact ? `found: ${returningContact!.name}` : 'not found')
       } catch (e) {
         console.error('[wa returning] lookup failed:', e)
       }
