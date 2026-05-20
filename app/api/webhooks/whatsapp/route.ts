@@ -604,10 +604,10 @@ export async function POST(req: NextRequest) {
       if (call?.function?.name === 'generate_quote') {
         const args = JSON.parse(call.function.arguments) as QuoteArgs
         const reply = await handleGenerateQuote(args)
-        // Save contact so returning sessions can skip name/email collection
+        // Save contact before returning — must be awaited so serverless function doesn't exit before the DB write completes
         const tenantId = process.env.TENANT_ID
         if (tenantId) {
-          createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone }).catch(() => {})
+          await createContact(tenantId, { name: args.customer_name, email: args.customer_email, phone }).catch(() => {})
         }
         push(phone, { role: 'assistant', content: reply })
         return twiml(reply)
