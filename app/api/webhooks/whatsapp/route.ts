@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-export const maxDuration = 10 // Vercel hobby plan limit
 import { createHmac } from 'crypto'
 import { getMessages, push, reset } from '@/lib/whatsapp/session'
 import { sendEmail } from '@/lib/email/send'
@@ -11,6 +9,8 @@ import { sql } from '@/lib/db/client'
 import { upsertWhatsAppContact, getWhatsAppContact } from '@/lib/whatsapp/contacts'
 import { textToHtml } from '@/lib/llm/formatter'
 import { formatCurrency } from '@/lib/utils/currency'
+
+export const maxDuration = 10 // Vercel hobby plan limit
 
 // ── Pricing tables (mirrors app/api/chat/route.ts) ────────────────────────────
 
